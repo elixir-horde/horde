@@ -1,18 +1,7 @@
 defmodule HordePro do
   @moduledoc """
-  Documentation for `HordePro`.
+  `HordePro` is a Postgres-backed distributed supervisor and registry.
+
+  See `HordePro.DynamicSupervisor` and `HordePro.Registry`.
   """
-
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> HordePro.hello()
-      :world
-
-  """
-  def hello do
-    :world
-  end
 end
