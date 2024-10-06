@@ -7,10 +7,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         elixir-version: [1.15, 1.14]
         otp-version: [27, 26, 25, 24]
-        fail-fast: false
         exclude:
           - elixir-version: 1.13
             otp-version: 26
