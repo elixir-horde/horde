@@ -13,6 +13,8 @@ jobs:
         exclude:
           - elixir-version: 1.13
             otp-version: 26
+          - elixir-version: 1.14
+            otp-version: 27
 
     name: Tests
     steps:
