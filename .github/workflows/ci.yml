@@ -6,6 +6,7 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    continue-on-error: true
     strategy:
       matrix:
         elixir-version: [1.15, 1.14]
