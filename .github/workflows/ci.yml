@@ -19,6 +19,17 @@ jobs:
           - elixir-version: 1.15
             otp-version: 27
 
+    services:
+      postgres:
+        image: postgres:17.0
+        ports:
+          - 5431:5432
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: highlander
+          POSTGRES_PORT: 5431
+
     name: Tests
     steps:
       - uses: actions/checkout@v4
