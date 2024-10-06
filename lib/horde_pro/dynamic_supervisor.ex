@@ -26,4 +26,13 @@ defmodule HordePro.DynamicSupervisor do
   # Perhaps if all locks can be acquired on boot, it simply truncates the table? Going to have to be careful of race conditions here. Maybe we have 1 lock to register, and in that way we can serialize registering. Then we can acquire the lock, check if we get all other locks, if that is the case, we truncate. Only after we register our own node lock, do we release the global lock. Race condition sorted!
   #
   # 1200 LOC Elixir.DynamicSupervisor (620 LOC of actual code). We will probably be copying most of that and then adding our own stuff on top.
+
+  def start_link(opts) when is_list(opts) do
+  end
+
+  def start_link(mod, init_arg, opts \\ []) do
+    name = :"#{opts[:name]}.Supervisor"
+    start_opts = Keyword.put(opts, :name, name)
+    Supervisor.start_link(__MODULE__, {mod, init_arg, opts[:name]}, start_opts)
+  end
 end
