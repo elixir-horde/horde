@@ -6,6 +6,7 @@ defmodule HordePro.MixProject do
       app: :horde_pro,
       version: "0.1.0",
       elixir: "~> 1.14",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
@@ -25,4 +26,7 @@ defmodule HordePro.MixProject do
       {:postgrex, "~> 0.17"}
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 end
