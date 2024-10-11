@@ -25,7 +25,9 @@ defmodule HordePro.LockerTest do
     assert true == Locker.try_lock(locker1, "lock1")
     assert false == Locker.try_lock(locker2, "lock1")
 
-    GenServer.stop(locker1)
+    Process.flag(:trap_exit, true)
+    Process.exit(locker1, :kill)
+    assert_receive {:EXIT, ^locker1, :killed}
 
     assert true == Locker.try_lock(locker2, "lock1")
   end
