@@ -56,4 +56,17 @@ defmodule HordePro.LockerTest do
 
     assert true == Locker.try_lock(locker2, "lock3")
   end
+
+  test "with_lock/3 handles exceptions" do
+    locker1 = locker()
+    locker2 = locker()
+
+    assert_raise RuntimeError, fn ->
+      Locker.with_lock locker1, "lock3" do
+        raise "stop here"
+      end
+    end
+
+    assert true == Locker.try_lock(locker2, "lock3")
+  end
 end
