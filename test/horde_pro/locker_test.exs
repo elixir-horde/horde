@@ -29,6 +29,8 @@ defmodule HordePro.LockerTest do
     Process.exit(locker1, :kill)
     assert_receive {:EXIT, ^locker1, :killed}
 
+    Process.sleep(20)
+
     assert true == Locker.try_lock(locker2, "lock1")
   end
 
