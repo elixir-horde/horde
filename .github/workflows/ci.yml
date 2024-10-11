@@ -25,10 +25,7 @@ jobs:
         ports:
           - 5431:5432
         env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-          POSTGRES_DB: horde_pro
-          POSTGRES_PORT: 6431
+          POSTGRES_URL: "ecto://postgres:postgres@localhost:5431/horde_pro"
 
     name: Tests
     steps:

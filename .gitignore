@@ -24,3 +24,5 @@ horde_pro-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+.envrc
