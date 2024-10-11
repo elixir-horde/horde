@@ -4,6 +4,6 @@ defmodule HordeProTest.Repo do
     adapter: Ecto.Adapters.Postgres
 
   def init(_context, _config) do
-    {:ok, url: "ecto://postgres:postgres@localhost/horde_pro"}
+    {:ok, url: "ecto://postgres:postgres@localhost:6431/horde_pro"}
   end
 end
