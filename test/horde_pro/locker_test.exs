@@ -4,23 +4,18 @@ defmodule HordePro.LockerTest do
   alias HordePro.Locker
   alias HordeProTest.Repo
 
+  require Locker
+
   defp locker() do
     {:ok, locker} = Locker.start_link(repo: Repo)
     locker
   end
 
-  test "can acquire a lock" do
+  test "try_lock/2" do
     locker1 = locker()
     locker2 = locker()
     assert true == Locker.try_lock(locker1, "hello!")
     assert false == Locker.try_lock(locker2, "hello!")
-  end
-
-  test "tracks which locks have been acquired" do
-    locker1 = locker()
-    assert true == Locker.try_lock(locker1, "lock1")
-    assert true == Locker.try_lock(locker1, "lock2")
-    assert ["lock2", "lock1"] == Locker.which_locks(locker1)
   end
 
   test "unlocks when process dies" do
@@ -33,5 +28,28 @@ defmodule HordePro.LockerTest do
     GenServer.stop(locker1)
 
     assert true == Locker.try_lock(locker2, "lock1")
+  end
+
+  test "release/2" do
+    locker1 = locker()
+    locker2 = locker()
+
+    assert true == Locker.try_lock(locker1, "lock2")
+    assert false == Locker.try_lock(locker2, "lock2")
+
+    assert true == Locker.release(locker1, "lock2")
+
+    assert true == Locker.try_lock(locker2, "lock2")
+  end
+
+  test "with_lock/3" do
+    locker1 = locker()
+    locker2 = locker()
+
+    Locker.with_lock locker1, "lock3" do
+      assert false == Locker.try_lock(locker2, "lock3")
+    end
+
+    assert true == Locker.try_lock(locker2, "lock3")
   end
 end

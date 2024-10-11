@@ -21,15 +21,29 @@ defmodule HordePro.Locker do
     SimpleConnection.call(locker, {:try_lock, lock_id}, @timeout)
   end
 
-  def which_locks(locker) do
-    SimpleConnection.call(locker, :which_locks, @timeout)
+  def release(locker, lock_id) do
+    SimpleConnection.call(locker, {:release, lock_id}, @timeout)
+  end
+
+  defmacro with_lock(locker, lock_id, do: block) do
+    quote do
+      try do
+        if HordePro.Locker.try_lock(unquote(locker), unquote(lock_id)) do
+          unquote(block)
+        else
+          false
+        end
+      after
+        HordePro.Locker.release(unquote(locker), unquote(lock_id))
+      end
+    end
   end
 
   ### SERVER CALLBACKS ###
 
   @impl SimpleConnection
   def init(:no_arg) do
-    {:ok, %{from: nil, locks: [], requested_lock_id: nil}}
+    {:ok, %{from: nil, requested_lock_id: nil, releasing_lock_id: nil}}
   end
 
   @impl SimpleConnection
@@ -37,28 +51,36 @@ defmodule HordePro.Locker do
     {:query, try_lock_query(lock_id), %{state | from: from, requested_lock_id: lock_id}}
   end
 
-  def handle_call(:which_locks, from, state) do
-    SimpleConnection.reply(from, state.locks)
-    {:noreply, state}
+  def handle_call({:release, lock_id}, from, state) do
+    {:query, release_query(lock_id), %{state | from: from, releasing_lock_id: lock_id}}
   end
 
   @impl SimpleConnection
-  def handle_result(results, state) when is_list(results) do
+  def handle_result(results, state = %{requested_lock_id: r})
+      when not is_nil(r) and is_list(results) do
     case results do
       [%{rows: [["t"]]}] ->
         SimpleConnection.reply(state.from, true)
 
-        {:noreply,
-         %{
-           state
-           | locks: [state.requested_lock_id | state.locks],
-             from: nil,
-             requested_lock_id: nil
-         }}
+        {:noreply, %{state | from: nil, requested_lock_id: nil}}
 
       [%{rows: [["f"]]}] ->
         SimpleConnection.reply(state.from, false)
         {:noreply, %{state | from: nil, requested_lock_id: nil}}
+    end
+  end
+
+  def handle_result(results, state = %{releasing_lock_id: r})
+      when not is_nil(r) and is_list(results) do
+    case results do
+      [%{rows: [["t"]]}] ->
+        SimpleConnection.reply(state.from, true)
+
+        {:noreply, %{state | from: nil, releasing_lock_id: nil}}
+
+      [%{rows: [["f"]]}] ->
+        SimpleConnection.reply(state.from, false)
+        {:noreply, %{state | from: nil, releasing_lock_id: nil}}
     end
   end
 
@@ -69,7 +91,14 @@ defmodule HordePro.Locker do
 
   @lock_namespace :erlang.phash2("horde_pro")
 
+  #
+  # https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS
+  #
   defp try_lock_query(lock_name) do
     "select pg_try_advisory_lock(#{@lock_namespace}, #{:erlang.phash2(lock_name)})"
+  end
+
+  defp release_query(lock_name) do
+    "select pg_advisory_unlock(#{@lock_namespace}, #{:erlang.phash2(lock_name)})"
   end
 end
