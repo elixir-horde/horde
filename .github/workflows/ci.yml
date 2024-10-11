@@ -6,6 +6,9 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      POSTGRES_URL: "ecto://postgres:postgres@localhost:5431/horde_pro"
+
     strategy:
       fail-fast: false
       matrix:
@@ -25,7 +28,10 @@ jobs:
         ports:
           - 5431:5432
         env:
-          POSTGRES_URL: "ecto://postgres:postgres@localhost:5431/horde_pro"
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: horde_pro
+          POSTGRES_PORT: 5431
 
     name: Tests
     steps:
