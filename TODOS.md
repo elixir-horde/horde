@@ -1,0 +1,2 @@
+- write mix task to copy migrations into repo migrations folder
+- optimize tables with indexes
