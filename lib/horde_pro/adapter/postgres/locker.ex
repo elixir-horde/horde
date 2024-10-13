@@ -25,6 +25,11 @@ defmodule HordePro.Adapter.Postgres.Locker do
     SimpleConnection.call(locker, {:release, lock_id}, @timeout)
   end
 
+  @max_int Integer.pow(2, 32) - 1
+  def make_lock_id() do
+    :rand.uniform(@max_int)
+  end
+
   defmacro with_lock(locker, lock_id, do: block) do
     quote do
       try do

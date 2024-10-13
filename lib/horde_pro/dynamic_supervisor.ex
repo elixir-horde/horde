@@ -261,6 +261,9 @@ defmodule HordePro.DynamicSupervisor do
     :max_children,
     :max_restarts,
     :max_seconds,
+    :repo,
+    :locker,
+    :lock_id,
     children: %{},
     restarts: []
   ]
@@ -283,7 +286,7 @@ defmodule HordePro.DynamicSupervisor do
 
     %{
       id: id,
-      start: {DynamicSupervisor, :start_link, [options]},
+      start: {HordePro.DynamicSupervisor, :start_link, [options]},
       type: :supervisor
     }
   end
@@ -291,7 +294,7 @@ defmodule HordePro.DynamicSupervisor do
   @doc false
   defmacro __using__(opts) do
     quote location: :keep, bind_quoted: [opts: opts] do
-      @behaviour DynamicSupervisor
+      @behaviour HordePro.DynamicSupervisor
       if not Module.has_attribute?(__MODULE__, :doc) do
         @doc """
         Returns a specification to start this module under a supervisor.
@@ -366,7 +369,7 @@ defmodule HordePro.DynamicSupervisor do
   @doc since: "1.6.0"
   @spec start_link([init_option | GenServer.option()]) :: Supervisor.on_start()
   def start_link(options) when is_list(options) do
-    keys = [:extra_arguments, :max_children, :max_seconds, :max_restarts, :strategy]
+    keys = [:extra_arguments, :max_children, :max_seconds, :max_restarts, :strategy, :repo]
     {sup_opts, start_opts} = Keyword.split(options, keys)
     start_link(Supervisor.Default, init(sup_opts), start_opts)
   end
@@ -630,13 +633,15 @@ defmodule HordePro.DynamicSupervisor do
     period = Keyword.get(options, :max_seconds, 5)
     max_children = Keyword.get(options, :max_children, :infinity)
     extra_arguments = Keyword.get(options, :extra_arguments, [])
+    repo = Keyword.get(options, :repo, nil)
 
     flags = %{
       strategy: strategy,
       intensity: intensity,
       period: period,
       max_children: max_children,
-      extra_arguments: extra_arguments
+      extra_arguments: extra_arguments,
+      repo: repo
     }
 
     {:ok, flags}
@@ -658,7 +663,7 @@ defmodule HordePro.DynamicSupervisor do
             is_tuple(name) -> name
           end
 
-        state = %DynamicSupervisor{mod: mod, args: init_arg, name: name}
+        state = %HordePro.DynamicSupervisor{mod: mod, args: init_arg, name: name}
 
         case init(state, flags) do
           {:ok, state} -> {:ok, state}
@@ -680,13 +685,17 @@ defmodule HordePro.DynamicSupervisor do
     max_seconds = Map.get(flags, :period, 5)
     strategy = Map.get(flags, :strategy, :one_for_one)
     auto_shutdown = Map.get(flags, :auto_shutdown, :never)
+    repo = Map.get(flags, :repo)
 
     with :ok <- validate_strategy(strategy),
          :ok <- validate_restarts(max_restarts),
          :ok <- validate_seconds(max_seconds),
          :ok <- validate_dynamic(max_children),
          :ok <- validate_extra_arguments(extra_arguments),
-         :ok <- validate_auto_shutdown(auto_shutdown) do
+         :ok <- validate_auto_shutdown(auto_shutdown),
+         :ok <- validate_repo(repo) do
+      {locker, lock_id} = HordePro.Adapter.Postgres.DynamicSupervisor.init(repo)
+
       {:ok,
        %{
          state
@@ -694,7 +703,10 @@ defmodule HordePro.DynamicSupervisor do
            max_children: max_children,
            max_restarts: max_restarts,
            max_seconds: max_seconds,
-           strategy: strategy
+           strategy: strategy,
+           repo: repo,
+           locker: locker,
+           lock_id: lock_id
        }}
     end
   end
@@ -719,6 +731,10 @@ defmodule HordePro.DynamicSupervisor do
 
   defp validate_auto_shutdown(auto_shutdown),
     do: {:error, {:invalid_auto_shutdown, auto_shutdown}}
+
+  defp validate_repo(_repo) do
+    :ok
+  end
 
   @impl true
   def handle_call(:which_children, _from, state) do
@@ -830,6 +846,18 @@ defmodule HordePro.DynamicSupervisor do
 
   defp save_child(pid, mfa, restart, shutdown, type, modules, state) do
     mfa = mfa_for_restart(mfa, restart)
+
+    :ok =
+      HordePro.Adapter.Postgres.DynamicSupervisor.save_child(
+        pid,
+        mfa,
+        restart,
+        shutdown,
+        type,
+        modules,
+        state
+      )
+
     put_in(state.children[pid], {mfa, restart, shutdown, type, modules})
   end
 
@@ -846,6 +874,10 @@ defmodule HordePro.DynamicSupervisor do
   end
 
   @impl true
+  def handle_info({:EXIT, pid, _reason}, %{locker: pid} = state) do
+    {:stop, :shutdown, state}
+  end
+
   def handle_info({:EXIT, pid, reason}, state) do
     case maybe_restart_child(pid, reason, state) do
       {:ok, state} -> {:noreply, state}
@@ -875,7 +907,7 @@ defmodule HordePro.DynamicSupervisor do
   def handle_info(msg, state) do
     :logger.error(
       %{
-        label: {DynamicSupervisor, :unexpected_msg},
+        label: {HordePro.DynamicSupervisor, :unexpected_msg},
         report: %{
           msg: msg
         }
@@ -1172,6 +1204,6 @@ defmodule HordePro.DynamicSupervisor do
         label: {__MODULE__, :unexpected_msg},
         report: %{msg: msg}
       }) do
-    {~c"DynamicSupervisor received unexpected message: ~p~n", [msg]}
+    {~c"HordePro.DynamicSupervisor received unexpected message: ~p~n", [msg]}
   end
 end
