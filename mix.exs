@@ -9,7 +9,8 @@ defmodule HordePro.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       package: package(),
-      deps: deps()
+      deps: deps(),
+      docs: docs()
     ]
   end
 
@@ -20,20 +21,24 @@ defmodule HordePro.MixProject do
     ]
   end
 
-  # Run "mix help deps" to learn about dependencies.
-  defp deps do
-    [
-      {:ecto_sql, "~> 3.10"},
-      {:postgrex, "~> 0.17"}
-    ]
-  end
-
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
   defp package() do
     [
       files: ~w(lib priv/repo/migrations mix.exs README* LICENSE* CHANGELOG*)
+    ]
+  end
+
+  defp docs do
+    [main: "HordePro"]
+  end
+
+  defp deps do
+    [
+      {:ecto_sql, "~> 3.10"},
+      {:ex_doc, "> 0.0.0", only: :dev},
+      {:postgrex, "~> 0.17"}
     ]
   end
 end

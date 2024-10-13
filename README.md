@@ -1,6 +1,13 @@
 # HordePro
+<!-- MDOC !-->
 
-**TODO: Add description**
+`HordePro` is a Postgres-backed distributed supervisor and registry.
+
+See `HordePro.DynamicSupervisor` and `HordePro.Registry`.
+
+## Getting Started
+
+Purchase a subscription to HordePro at Code Code Ship.
 
 ## Installation
 

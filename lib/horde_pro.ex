@@ -1,7 +1,7 @@
 defmodule HordePro do
-  @moduledoc """
-  `HordePro` is a Postgres-backed distributed supervisor and registry.
-
-  See `HordePro.DynamicSupervisor` and `HordePro.Registry`.
-  """
+  @external_resource "README.md"
+  @moduledoc @external_resource
+             |> File.read!()
+             |> String.split("<!-- MDOC !-->")
+             |> Enum.fetch!(1)
 end
