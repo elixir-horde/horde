@@ -1,1 +1,2 @@
 export POSTGRES_URL="ecto://postgres:postgres@localhost:6431/horde_pro"
+export MIX_ENV=test
