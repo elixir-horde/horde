@@ -1,5 +1,4 @@
-default:
-  mix test
+default: watch
 
 docker:
   docker-compose up -d
