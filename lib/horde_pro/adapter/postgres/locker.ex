@@ -1,4 +1,4 @@
-defmodule HordePro.Locker do
+defmodule HordePro.Adapter.Postgres.Locker do
   @moduledoc false
 
   alias Postgrex.SimpleConnection
@@ -28,13 +28,13 @@ defmodule HordePro.Locker do
   defmacro with_lock(locker, lock_id, do: block) do
     quote do
       try do
-        if HordePro.Locker.try_lock(unquote(locker), unquote(lock_id)) do
+        if HordePro.Adapter.Postgres.Locker.try_lock(unquote(locker), unquote(lock_id)) do
           unquote(block)
         else
           false
         end
       after
-        HordePro.Locker.release(unquote(locker), unquote(lock_id))
+        HordePro.Adapter.Postgres.Locker.release(unquote(locker), unquote(lock_id))
       end
     end
   end
