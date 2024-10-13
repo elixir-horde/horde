@@ -4,7 +4,7 @@ docker:
   docker-compose up -d
 
 watch:
-  find lib test | MIX_ENV=test entr mix do compile --warnings-as-errors, test
+  watchexec -r --clear=reset --project-origin=. --stop-timeout=0 MIX_ENV=test mix do compile --warnings-as-errors, test
 
 migrate:
   mix ecto.migrate -r HordeProTest.Repo
