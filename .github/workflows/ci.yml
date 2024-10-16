@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       POSTGRES_URL: "ecto://postgres:postgres@localhost:5431/horde_pro"
+      MIX_ENV: "test"
 
     strategy:
       fail-fast: false
