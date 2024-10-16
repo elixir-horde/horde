@@ -7,7 +7,7 @@ defmodule HordePro.Adapter.Postgres.Locker do
 
   @timeout 5000
   @type t :: any()
-  @type lock_id :: String.t()
+  @type lock_id :: integer() | {integer(), integer()}
 
   def start_link(repo: repo) do
     config = repo.config()
@@ -26,8 +26,12 @@ defmodule HordePro.Adapter.Postgres.Locker do
   end
 
   @max_int Integer.pow(2, 32) - 1
-  def make_lock_id() do
-    :rand.uniform(@max_int)
+
+  def make_lock_32() do
+    # :rand.uniform returns an unsigned integer. We want a signed integer with the same number of bits.
+    <<x::signed-32>> = <<:rand.uniform(@max_int)::unsigned-32>>
+
+    x
   end
 
   defmacro with_lock(locker, lock_id, do: block) do
@@ -94,16 +98,25 @@ defmodule HordePro.Adapter.Postgres.Locker do
     {:noreply, state}
   end
 
-  @lock_namespace :erlang.phash2("horde_pro")
+  # @lock_namespace :erlang.phash2("horde_pro")
 
   #
   # https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS
   #
-  defp try_lock_query(lock_name) do
-    "select pg_try_advisory_lock(#{@lock_namespace}, #{:erlang.phash2(lock_name)})"
+
+  defp try_lock_query({l1, l2}) do
+    "select pg_try_advisory_lock(#{l1}, #{l2})"
   end
 
-  defp release_query(lock_name) do
-    "select pg_advisory_unlock(#{@lock_namespace}, #{:erlang.phash2(lock_name)})"
+  defp try_lock_query(l1) do
+    "select pg_try_advisory_lock(#{l1})"
+  end
+
+  defp release_query({l1, l2}) do
+    "select pg_advisory_unlock(#{l1}, #{l2})"
+  end
+
+  defp release_query(l1) do
+    "select pg_advisory_unlock(#{l1})"
   end
 end
