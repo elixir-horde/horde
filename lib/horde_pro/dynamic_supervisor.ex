@@ -941,7 +941,26 @@ defmodule HordePro.DynamicSupervisor do
 
   @impl true
   def terminate(_, %{children: children} = state) do
+    :ok = terminate_locker(state.locker)
     :ok = terminate_children(children, state)
+  end
+
+  defp terminate_locker(locker) do
+    monitor = Process.monitor(locker)
+    Process.exit(locker, :shutdown)
+
+    receive do
+      {:DOWN, ^monitor, :process, ^locker, _reason} ->
+        :ok
+    after
+      5000 ->
+        Process.exit(locker, :kill)
+
+        receive do
+          {:DOWN, ^monitor, :process, ^locker, _reason} ->
+            :ok
+        end
+    end
   end
 
   defp terminate_children(children, state) do
