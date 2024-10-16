@@ -49,4 +49,4 @@ jobs:
       - run: mix format --check-formatted
         if: matrix.elixir-version == 1.17 && matrix.otp-version == 27
 
-      - run: mix test
+      - run: mix do ecto.create --quiet -r HordeProTest.Repo, ecto.migrate -r HordeProTest.Repo, test
