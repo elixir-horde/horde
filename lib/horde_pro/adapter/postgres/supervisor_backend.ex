@@ -42,8 +42,7 @@ defmodule HordePro.Adapter.Postgres.SupervisorBackend do
           select: p.lock_id
         )
         |> t.repo.all()
-        |> Enum.all?(fn lock_str ->
-          lock_id = Integer.parse(lock_str)
+        |> Enum.all?(fn lock_id ->
           Locker.try_lock(t.locker_pid, {@lock_namespace, lock_id})
         end)
 
@@ -56,14 +55,31 @@ defmodule HordePro.Adapter.Postgres.SupervisorBackend do
   end
 
   def save_child(t, _pid, mfa, restart, shutdown, type, modules) do
-    %{
-      mfa: :erlang.term_to_binary(mfa),
-      restart: restart,
-      shutdown: shutdown,
+    shutdown_type =
+      case shutdown do
+        :infinity -> :infinity
+        _other -> :timeout
+      end
+
+    shutdown_timeout =
+      case shutdown do
+        :infinity -> 0
+        int -> int
+      end
+
+    params = %{
+      mfargs: :erlang.term_to_binary(mfa),
+      restart_type: restart,
+      shutdown_type: shutdown_type,
+      shutdown_timeout: shutdown_timeout,
       child_type: type,
       modules: :erlang.term_to_binary(modules),
       lock_id: t.lock_id
     }
+
+    {:ok, _} =
+      HordePro.Process.changeset(%HordePro.Process{}, params)
+      |> t.repo.insert()
 
     :ok
   end

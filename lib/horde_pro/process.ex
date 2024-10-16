@@ -7,10 +7,10 @@ defmodule HordePro.Process do
 
   schema "horde_pro_processes" do
     field(:mfargs, :binary)
-    field(:restart_type, :string)
-    field(:shutdown_type, :string)
+    field(:restart_type, Ecto.Enum, values: [:permanent, :transient, :temporary])
+    field(:shutdown_type, Ecto.Enum, values: [:infinity, :timeout])
     field(:shutdown_timeout, :integer)
-    field(:child_type, :string)
+    field(:child_type, Ecto.Enum, values: [:worker, :supervisor])
     field(:lock_id, :integer)
   end
 
