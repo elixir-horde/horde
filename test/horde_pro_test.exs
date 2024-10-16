@@ -6,7 +6,13 @@ defmodule HordeProTest do
   alias HordePro.DynamicSupervisor, as: Sup
 
   test "starts a child" do
-    {:ok, sup} = Sup.start_link(name: :n1, strategy: :one_for_one, repo: HordeProTest.Repo)
+    {:ok, sup} =
+      Sup.start_link(
+        name: :n1,
+        strategy: :one_for_one,
+        backend: HordePro.Adapter.Postgres.SupervisorBackend.new(repo: HordeProTest.Repo)
+      )
+
     test_pid = self()
 
     {:ok, _pid} =

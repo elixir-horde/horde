@@ -261,9 +261,7 @@ defmodule HordePro.DynamicSupervisor do
     :max_children,
     :max_restarts,
     :max_seconds,
-    :repo,
-    :locker,
-    :lock_id,
+    :backend,
     children: %{},
     restarts: []
   ]
@@ -369,7 +367,7 @@ defmodule HordePro.DynamicSupervisor do
   @doc since: "1.6.0"
   @spec start_link([init_option | GenServer.option()]) :: Supervisor.on_start()
   def start_link(options) when is_list(options) do
-    keys = [:extra_arguments, :max_children, :max_seconds, :max_restarts, :strategy, :repo]
+    keys = [:extra_arguments, :max_children, :max_seconds, :max_restarts, :strategy, :backend]
     {sup_opts, start_opts} = Keyword.split(options, keys)
     start_link(Supervisor.Default, init(sup_opts), start_opts)
   end
@@ -633,7 +631,7 @@ defmodule HordePro.DynamicSupervisor do
     period = Keyword.get(options, :max_seconds, 5)
     max_children = Keyword.get(options, :max_children, :infinity)
     extra_arguments = Keyword.get(options, :extra_arguments, [])
-    repo = Keyword.get(options, :repo, nil)
+    backend = Keyword.get(options, :backend, nil)
 
     flags = %{
       strategy: strategy,
@@ -641,7 +639,7 @@ defmodule HordePro.DynamicSupervisor do
       period: period,
       max_children: max_children,
       extra_arguments: extra_arguments,
-      repo: repo
+      backend: backend
     }
 
     {:ok, flags}
@@ -685,7 +683,7 @@ defmodule HordePro.DynamicSupervisor do
     max_seconds = Map.get(flags, :period, 5)
     strategy = Map.get(flags, :strategy, :one_for_one)
     auto_shutdown = Map.get(flags, :auto_shutdown, :never)
-    repo = Map.get(flags, :repo)
+    backend = Map.get(flags, :backend)
 
     with :ok <- validate_strategy(strategy),
          :ok <- validate_restarts(max_restarts),
@@ -693,8 +691,8 @@ defmodule HordePro.DynamicSupervisor do
          :ok <- validate_dynamic(max_children),
          :ok <- validate_extra_arguments(extra_arguments),
          :ok <- validate_auto_shutdown(auto_shutdown),
-         :ok <- validate_repo(repo) do
-      {locker, lock_id} = HordePro.Adapter.Postgres.DynamicSupervisor.init(repo)
+         :ok <- validate_backend(backend) do
+      new_backend = HordePro.Adapter.Postgres.SupervisorBackend.init(backend)
 
       {:ok,
        %{
@@ -704,9 +702,7 @@ defmodule HordePro.DynamicSupervisor do
            max_restarts: max_restarts,
            max_seconds: max_seconds,
            strategy: strategy,
-           repo: repo,
-           locker: locker,
-           lock_id: lock_id
+           backend: new_backend
        }}
     end
   end
@@ -732,7 +728,7 @@ defmodule HordePro.DynamicSupervisor do
   defp validate_auto_shutdown(auto_shutdown),
     do: {:error, {:invalid_auto_shutdown, auto_shutdown}}
 
-  defp validate_repo(_repo) do
+  defp validate_backend(_backend) do
     :ok
   end
 
@@ -848,14 +844,14 @@ defmodule HordePro.DynamicSupervisor do
     mfa = mfa_for_restart(mfa, restart)
 
     :ok =
-      HordePro.Adapter.Postgres.DynamicSupervisor.save_child(
+      HordePro.Adapter.Postgres.SupervisorBackend.save_child(
+        state.backend,
         pid,
         mfa,
         restart,
         shutdown,
         type,
-        modules,
-        state
+        modules
       )
 
     put_in(state.children[pid], {mfa, restart, shutdown, type, modules})
@@ -941,26 +937,8 @@ defmodule HordePro.DynamicSupervisor do
 
   @impl true
   def terminate(_, %{children: children} = state) do
-    :ok = terminate_locker(state.locker)
+    :ok = HordePro.Adapter.Postgres.SupervisorBackend.terminate(state.backend)
     :ok = terminate_children(children, state)
-  end
-
-  defp terminate_locker(locker) do
-    monitor = Process.monitor(locker)
-    Process.exit(locker, :shutdown)
-
-    receive do
-      {:DOWN, ^monitor, :process, ^locker, _reason} ->
-        :ok
-    after
-      5000 ->
-        Process.exit(locker, :kill)
-
-        receive do
-          {:DOWN, ^monitor, :process, ^locker, _reason} ->
-            :ok
-        end
-    end
   end
 
   defp terminate_children(children, state) do
