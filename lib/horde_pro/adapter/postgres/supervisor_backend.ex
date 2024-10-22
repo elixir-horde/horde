@@ -4,6 +4,7 @@ defmodule HordePro.Adapter.Postgres.SupervisorBackend do
   import Ecto.Query, only: [from: 2]
 
   alias HordePro.Adapter.Postgres.Locker
+  alias HordePro.Adapter.Postgres.Manager
   require Locker
 
   def new(repo: repo) do
@@ -15,6 +16,7 @@ defmodule HordePro.Adapter.Postgres.SupervisorBackend do
     |> assign_locker()
     |> assign_new_lock_id()
     |> maybe_empty_process_table()
+    |> assign_manager()
   end
 
   defp assign_locker(t) do
@@ -25,6 +27,18 @@ defmodule HordePro.Adapter.Postgres.SupervisorBackend do
   # TODO make these configurable
   @lock_namespace 993_399
   @global_lock 92_929_292
+
+  defp assign_manager(t) do
+    {:ok, manager_pid} =
+      Manager.start_link(
+        locker_pid: t.locker_pid,
+        repo: t.repo,
+        lock_namespace: @lock_namespace,
+        lock_id: t.lock_id
+      )
+
+    t |> Map.put(:manager_pid, manager_pid)
+  end
 
   defp assign_new_lock_id(t) do
     Locker.with_lock t.locker_pid, @global_lock do
@@ -39,7 +53,8 @@ defmodule HordePro.Adapter.Postgres.SupervisorBackend do
       all_locks? =
         from(p in HordePro.Process,
           distinct: p.lock_id,
-          select: p.lock_id
+          select: p.lock_id,
+          where: not is_nil(p.lock_id)
         )
         |> t.repo.all()
         |> Enum.all?(fn lock_id ->
@@ -84,19 +99,24 @@ defmodule HordePro.Adapter.Postgres.SupervisorBackend do
     :ok
   end
 
-  def terminate(%{locker_pid: locker_pid} = _t) do
-    monitor = Process.monitor(locker_pid)
-    Process.exit(locker_pid, :shutdown)
+  def terminate(t) do
+    stop_child(t.locker_pid)
+    stop_child(t.manager_pid)
+  end
+
+  defp stop_child(pid) do
+    monitor = Process.monitor(pid)
+    Process.exit(pid, :shutdown)
 
     receive do
-      {:DOWN, ^monitor, :process, ^locker_pid, _reason} ->
+      {:DOWN, ^monitor, :process, ^pid, _reason} ->
         :ok
     after
       5000 ->
-        Process.exit(locker_pid, :kill)
+        Process.exit(pid, :kill)
 
         receive do
-          {:DOWN, ^monitor, :process, ^locker_pid, _reason} ->
+          {:DOWN, ^monitor, :process, ^pid, _reason} ->
             :ok
         end
     end

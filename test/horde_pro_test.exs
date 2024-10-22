@@ -5,13 +5,19 @@ defmodule HordeProTest do
 
   alias HordePro.DynamicSupervisor, as: Sup
 
-  test "starts a child" do
-    {:ok, sup} =
+  defp sup(name) do
+    {:ok, supervisor} =
       Sup.start_link(
-        name: :n1,
+        name: name,
         strategy: :one_for_one,
         backend: HordePro.Adapter.Postgres.SupervisorBackend.new(repo: HordeProTest.Repo)
       )
+
+    supervisor
+  end
+
+  test "starts a child" do
+    sup = sup(:n1)
 
     test_pid = self()
 
@@ -29,5 +35,25 @@ defmodule HordeProTest do
   end
 
   test "handles termination" do
+    Process.flag(:trap_exit, true)
+
+    sup1 = sup(:n2)
+    _sup2 = sup(:n3)
+    test_pid = self()
+
+    {:ok, child_pid} =
+      Sup.start_child(
+        sup1,
+        {Task,
+         fn ->
+           send(test_pid, {self(), :test_message2})
+           Process.sleep(1000)
+         end}
+      )
+
+    assert_receive({^child_pid, :test_message2})
+
+    Process.exit(sup1, :kill)
+    assert_receive(:test_message2, 3000)
   end
 end
