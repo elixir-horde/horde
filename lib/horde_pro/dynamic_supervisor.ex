@@ -800,6 +800,21 @@ defmodule HordePro.DynamicSupervisor do
     end
   end
 
+  def handle_call({:resume_child, {pid, child}}, _from, state) do
+    %{children: children, max_children: max_children} = state
+
+    IO.inspect({map_size(children), max_children}, label: "MAX CHILDREN")
+
+    if map_size(children) < max_children do
+      case restart_child(pid, child, state) do
+        {:ok, state} ->
+          {:reply, :ok, state}
+      end
+    else
+      {:reply, {:error, :max_children}, state}
+    end
+  end
+
   def handle_call({:start_child, child}, _from, state) do
     %{children: children, max_children: max_children} = state
 
@@ -1095,6 +1110,7 @@ defmodule HordePro.DynamicSupervisor do
   end
 
   defp delete_child(pid, %{children: children} = state) do
+    :ok = HordePro.Adapter.Postgres.SupervisorBackend.delete_child(state.backend, pid)
     %{state | children: Map.delete(children, pid)}
   end
 
