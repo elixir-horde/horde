@@ -5,15 +5,25 @@ defmodule HordeProTest do
 
   alias HordePro.DynamicSupervisor, as: Sup
 
-  defp sup(sup_name, name) do
+  defp child_spec(sup_name) do
+    Sup.child_spec(
+      strategy: :one_for_one,
+      backend:
+        HordePro.Adapter.Postgres.SupervisorBackend.new(
+          repo: HordeProTest.Repo,
+          supervisor_id: sup_name
+        )
+    )
+  end
+
+  defp sup(name) do
     {:ok, supervisor} =
       Sup.start_link(
-        name: name,
         strategy: :one_for_one,
         backend:
           HordePro.Adapter.Postgres.SupervisorBackend.new(
             repo: HordeProTest.Repo,
-            supervisor_id: sup_name
+            supervisor_id: name
           )
       )
 
@@ -21,7 +31,7 @@ defmodule HordeProTest do
   end
 
   test "starts a child" do
-    sup = sup("n1", :n1)
+    sup = sup("n1")
 
     test_pid = self()
 
@@ -41,8 +51,8 @@ defmodule HordeProTest do
   test "handles termination" do
     Process.flag(:trap_exit, true)
 
-    sup1 = sup("n2", :n2)
-    _sup2 = sup("n2", :n3)
+    sup1 = sup("n2")
+    _sup2 = sup("n2")
     test_pid = self()
 
     child_spec =
@@ -61,5 +71,26 @@ defmodule HordeProTest do
     Process.exit(sup1, :kill)
 
     assert_receive({_child_pid, :test_message2}, 10000)
+  end
+
+  test "can be used with PartitionSupervisor" do
+    PartitionSupervisor.start_link(
+      name: MyPartitionSupervisor,
+      child_spec: child_spec("hello")
+    )
+
+    test_pid = self()
+
+    {:ok, _child_pid} =
+      Sup.start_child(
+        {:via, PartitionSupervisor, {MyPartitionSupervisor, :rand.uniform(1000)}},
+        {Task,
+         fn ->
+           send(test_pid, :got_ya!)
+           Process.sleep(1000)
+         end}
+      )
+
+    assert_receive :got_ya!
   end
 end
