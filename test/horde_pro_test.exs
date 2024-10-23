@@ -41,20 +41,18 @@ defmodule HordeProTest do
   test "handles termination" do
     Process.flag(:trap_exit, true)
 
-    sup1 = sup("n2", :n2) |> IO.inspect(label: "SUPn2")
-    _sup2 = sup("n2", :n3) |> IO.inspect(label: "SUPn3")
+    sup1 = sup("n2", :n2)
+    _sup2 = sup("n2", :n3)
     test_pid = self()
 
-    {:ok, child_pid} =
-      Sup.start_child(
-        sup1,
-        {Task,
-         fn ->
-           IO.inspect("TASK STARTED")
-           send(test_pid, {self(), :test_message2})
-           Process.sleep(1000)
-         end}
-      )
+    child_spec =
+      Task.child_spec(fn ->
+        send(test_pid, {self(), :test_message2})
+        Process.sleep(1000)
+      end)
+      |> Map.put(:restart, :transient)
+
+    {:ok, child_pid} = Sup.start_child(sup1, child_spec)
 
     # to make this work, I need to have the ability to shard multiple supervisors in the same table
 
@@ -62,6 +60,6 @@ defmodule HordeProTest do
 
     Process.exit(sup1, :kill)
 
-    assert_receive({_other_pid, :test_message2}, 3000)
+    assert_receive({_child_pid, :test_message2}, 10000)
   end
 end

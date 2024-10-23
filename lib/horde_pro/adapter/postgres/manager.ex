@@ -21,7 +21,14 @@ defmodule HordePro.Adapter.Postgres.Manager do
     schedule_tick()
 
     t =
-      Keyword.take(opts, [:repo, :locker_pid, :lock_namespace, :lock_id, :supervisor_id])
+      Keyword.take(opts, [
+        :repo,
+        :locker_pid,
+        :lock_namespace,
+        :lock_id,
+        :supervisor_pid,
+        :supervisor_id
+      ])
       |> Enum.into(%{})
 
     {:ok, t}
@@ -46,7 +53,6 @@ defmodule HordePro.Adapter.Postgres.Manager do
       where: c.supervisor_id == ^t.supervisor_id
     )
     |> t.repo.all()
-    |> IO.inspect(label: "LOCK_ID to acquire")
     |> Enum.map(fn lock_id ->
       Locker.with_lock t.locker_pid, {t.lock_namespace, lock_id} do
         from(c in HordePro.Child,
@@ -71,7 +77,6 @@ defmodule HordePro.Adapter.Postgres.Manager do
       where: c.supervisor_id == ^t.supervisor_id
     )
     |> t.repo.all()
-    |> IO.inspect(label: "FREE PROCESSES")
     |> Enum.map(fn child ->
       from(c in HordePro.Child,
         where: c.id == ^child.id,
@@ -79,7 +84,6 @@ defmodule HordePro.Adapter.Postgres.Manager do
         where: c.supervisor_id == ^t.supervisor_id
       )
       |> t.repo.update_all(set: [lock_id: t.lock_id])
-      |> IO.inspect(label: "SET LOCK")
       |> case do
         {1, nil} ->
           child
@@ -89,20 +93,9 @@ defmodule HordePro.Adapter.Postgres.Manager do
       end
     end)
     |> Enum.map(fn child ->
-      #
-      # start the child here, but in such a way that it doesn't save it a second time.
-      #
-      # maybe we can start the child here, and then delete the old one.
-      # only downside is that the operation isn't atomic. we can end up with duplicates this way. not ideal.
-      #
-      # but, adding a kind of `:resume_child` handler adds a bunch of code to the DynamicSupervisor that I'd rather not have to deal with.
-      #
-      IO.inspect(child, label: "RESUME THIS PLS")
-
       {pid, child} = HordePro.Child.decode(child)
 
-      GenServer.call(t.supervisor, {:resume_child, {pid, child}}, :infinity)
-      |> IO.inspect(label: "RESUME_CHILD")
+      GenServer.call(t.supervisor_pid, {:resume_child, {pid, child}}, :infinity)
     end)
 
     t

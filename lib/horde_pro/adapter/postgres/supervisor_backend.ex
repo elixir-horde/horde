@@ -37,7 +37,8 @@ defmodule HordePro.Adapter.Postgres.SupervisorBackend do
         repo: t.repo,
         lock_namespace: @lock_namespace,
         lock_id: t.lock_id,
-        supervisor: self()
+        supervisor_pid: self(),
+        supervisor_id: t.supervisor_id
       )
 
     t |> Map.put(:manager_pid, manager_pid)

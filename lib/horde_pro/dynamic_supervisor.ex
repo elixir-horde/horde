@@ -803,8 +803,6 @@ defmodule HordePro.DynamicSupervisor do
   def handle_call({:resume_child, {pid, child}}, _from, state) do
     %{children: children, max_children: max_children} = state
 
-    IO.inspect({map_size(children), max_children}, label: "MAX CHILDREN")
-
     if map_size(children) < max_children do
       case restart_child(pid, child, state) do
         {:ok, state} ->

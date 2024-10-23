@@ -55,8 +55,6 @@ defmodule HordePro.Child do
         int -> int
       end
 
-    IO.inspect(backend, label: "BACKEND")
-
     params =
       %{
         supervisor_id: backend.supervisor_id,
@@ -69,7 +67,6 @@ defmodule HordePro.Child do
         modules: :erlang.term_to_binary(modules),
         lock_id: backend.lock_id
       }
-      |> IO.inspect(label: "CHILD_PARAMS")
 
     HordePro.Child.changeset(%HordePro.Child{}, params)
   end
