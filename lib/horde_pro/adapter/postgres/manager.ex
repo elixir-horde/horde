@@ -21,7 +21,7 @@ defmodule HordePro.Adapter.Postgres.Manager do
     schedule_tick()
 
     t =
-      Keyword.take(opts, [:repo, :locker_pid, :lock_namespace, :lock_id, :supervisor])
+      Keyword.take(opts, [:repo, :locker_pid, :lock_namespace, :lock_id, :supervisor_id])
       |> Enum.into(%{})
 
     {:ok, t}
@@ -39,16 +39,20 @@ defmodule HordePro.Adapter.Postgres.Manager do
   end
 
   defp acquire_locks(t) do
-    from(p in HordePro.Child,
-      distinct: p.lock_id,
-      select: p.lock_id,
-      where: not is_nil(p.lock_id)
+    from(c in HordePro.Child,
+      distinct: c.lock_id,
+      select: c.lock_id,
+      where: not is_nil(c.lock_id),
+      where: c.supervisor_id == ^t.supervisor_id
     )
     |> t.repo.all()
     |> IO.inspect(label: "LOCK_ID to acquire")
     |> Enum.map(fn lock_id ->
       Locker.with_lock t.locker_pid, {t.lock_namespace, lock_id} do
-        from(p in HordePro.Child, where: p.lock_id == ^lock_id)
+        from(c in HordePro.Child,
+          where: c.lock_id == ^lock_id,
+          where: c.supervisor_id == ^t.supervisor_id
+        )
         |> t.repo.update_all(set: [lock_id: nil])
       end
     end)
@@ -62,11 +66,18 @@ defmodule HordePro.Adapter.Postgres.Manager do
     #
     # If we crash, then the lock will be reset by the manager on another node.
     #
-    from(p in HordePro.Child, where: is_nil(p.lock_id))
+    from(c in HordePro.Child,
+      where: is_nil(c.lock_id),
+      where: c.supervisor_id == ^t.supervisor_id
+    )
     |> t.repo.all()
     |> IO.inspect(label: "FREE PROCESSES")
     |> Enum.map(fn child ->
-      from(p in HordePro.Child, where: p.id == ^child.id, where: is_nil(p.lock_id))
+      from(c in HordePro.Child,
+        where: c.id == ^child.id,
+        where: is_nil(c.lock_id),
+        where: c.supervisor_id == ^t.supervisor_id
+      )
       |> t.repo.update_all(set: [lock_id: t.lock_id])
       |> IO.inspect(label: "SET LOCK")
       |> case do

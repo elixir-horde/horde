@@ -1,5 +1,5 @@
 defmodule HordePro.Adapter.Postgres.SupervisorBackend do
-  defstruct([:repo, :locker_pid, :lock_id])
+  defstruct([:repo, :supervisor_id, :locker_pid, :lock_id])
 
   import Ecto.Query, only: [from: 2]
 
@@ -7,8 +7,8 @@ defmodule HordePro.Adapter.Postgres.SupervisorBackend do
   alias HordePro.Adapter.Postgres.Manager
   require Locker
 
-  def new(repo: repo) do
-    %__MODULE__{repo: repo}
+  def new(opts) do
+    struct!(__MODULE__, opts |> Enum.into(%{}))
   end
 
   def init(t) do
@@ -68,10 +68,11 @@ defmodule HordePro.Adapter.Postgres.SupervisorBackend do
   defp maybe_empty_process_table(t) do
     Locker.with_lock t.locker_pid, @global_lock do
       all_locks =
-        from(p in HordePro.Child,
-          distinct: p.lock_id,
-          select: p.lock_id,
-          where: not is_nil(p.lock_id)
+        from(c in HordePro.Child,
+          distinct: c.lock_id,
+          select: c.lock_id,
+          where: c.supervisor_id == ^t.supervisor_id,
+          where: not is_nil(c.lock_id)
         )
         |> t.repo.all()
 
@@ -82,7 +83,8 @@ defmodule HordePro.Adapter.Postgres.SupervisorBackend do
         end)
 
       if all_locks != [] and all_locks? do
-        t.repo.delete_all(HordePro.Child)
+        from(c in HordePro.Child, where: c.supervisor_id == ^t.supervisor_id)
+        |> t.repo.delete_all()
       end
 
       Enum.each(all_locks, fn lock_id ->
@@ -95,7 +97,7 @@ defmodule HordePro.Adapter.Postgres.SupervisorBackend do
 
   def save_child(t, pid, mfa, restart, shutdown, type, modules) do
     {:ok, _} =
-      HordePro.Child.encode(pid, mfa, restart, shutdown, type, modules, t.lock_id)
+      HordePro.Child.encode(t, pid, mfa, restart, shutdown, type, modules)
       |> t.repo.insert()
 
     :ok
@@ -103,7 +105,14 @@ defmodule HordePro.Adapter.Postgres.SupervisorBackend do
 
   def delete_child(t, pid) do
     binary_pid = :erlang.term_to_binary(pid)
-    {1, nil} = from(c in HordePro.Child, where: c.pid == ^binary_pid) |> t.repo.delete_all()
+
+    {1, nil} =
+      from(c in HordePro.Child,
+        where: c.pid == ^binary_pid,
+        where: c.supervisor_id == ^t.supervisor_id
+      )
+      |> t.repo.delete_all()
+
     :ok
   end
 

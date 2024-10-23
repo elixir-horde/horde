@@ -6,6 +6,7 @@ defmodule HordePro.Child do
   import Ecto.Changeset
 
   schema "horde_pro_children" do
+    field(:supervisor_id, :string)
     field(:mfargs, :binary)
     field(:pid, :binary)
     field(:restart_type, Ecto.Enum, values: [:permanent, :transient, :temporary])
@@ -18,6 +19,7 @@ defmodule HordePro.Child do
 
   def changeset(process, params) do
     cast(process, params, [
+      :supervisor_id,
       :mfargs,
       :pid,
       :restart_type,
@@ -28,6 +30,7 @@ defmodule HordePro.Child do
       :lock_id
     ])
     |> validate_required([
+      :supervisor_id,
       :mfargs,
       :pid,
       :restart_type,
@@ -39,7 +42,7 @@ defmodule HordePro.Child do
     ])
   end
 
-  def encode(pid, mfa, restart, shutdown, type, modules, lock_id) do
+  def encode(backend, pid, mfa, restart, shutdown, type, modules) do
     shutdown_type =
       case shutdown do
         :infinity -> :infinity
@@ -52,16 +55,21 @@ defmodule HordePro.Child do
         int -> int
       end
 
-    params = %{
-      mfargs: :erlang.term_to_binary(mfa),
-      pid: :erlang.term_to_binary(pid),
-      restart_type: restart,
-      shutdown_type: shutdown_type,
-      shutdown_timeout: shutdown_timeout,
-      child_type: type,
-      modules: :erlang.term_to_binary(modules),
-      lock_id: lock_id
-    }
+    IO.inspect(backend, label: "BACKEND")
+
+    params =
+      %{
+        supervisor_id: backend.supervisor_id,
+        mfargs: :erlang.term_to_binary(mfa),
+        pid: :erlang.term_to_binary(pid),
+        restart_type: restart,
+        shutdown_type: shutdown_type,
+        shutdown_timeout: shutdown_timeout,
+        child_type: type,
+        modules: :erlang.term_to_binary(modules),
+        lock_id: backend.lock_id
+      }
+      |> IO.inspect(label: "CHILD_PARAMS")
 
     HordePro.Child.changeset(%HordePro.Child{}, params)
   end
