@@ -110,6 +110,7 @@ defmodule HordePro.Adapter.Postgres.SupervisorBackend do
     {1, nil} =
       from(c in HordePro.Child,
         where: c.pid == ^binary_pid,
+        where: c.lock_id == ^t.lock_id,
         where: c.supervisor_id == ^t.supervisor_id
       )
       |> t.repo.delete_all()
