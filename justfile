@@ -3,6 +3,9 @@ default: watch
 docker:
   docker-compose up -d
 
+bench:
+  MIX_ENV=dev mix run benchmarks/horde_pro_dynamic_supervisor.exs
+
 watch:
   watchexec -r --clear=reset --project-origin=. --stop-timeout=0 MIX_ENV=test mix do compile --warnings-as-errors, test
 
