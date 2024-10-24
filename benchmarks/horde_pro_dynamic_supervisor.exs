@@ -4,43 +4,66 @@ defmodule HordeProTest.Repo do
     adapter: Ecto.Adapters.Postgres
 
   def init(_context, config) do
-    {:ok, Keyword.put(config, :url, System.get_env("POSTGRES_URL"))}
+    new_config =
+      config
+      |> Keyword.put(:url, System.get_env("POSTGRES_URL"))
+      |> Keyword.put(:pool_size, 50)
+
+    {:ok, new_config}
   end
 end
 
 {:ok, _pid} = HordeProTest.Repo.start_link()
 
-Logger.configure(level: :info)
+Logger.configure(level: :critical)
+
+cases = %{"thousand" => 1..1000}
+# parallel = %{"one" => 1, "two" => 2, "four" => 4, "eight" => 8, "sixteen" => 16}
+parallel = %{"one" => 1, "eight" => 8, "sixteen" => 16, "thirtytwo" => 32}
+
+inputs =
+  Enum.flat_map(cases, fn {k1, v1} ->
+    Enum.map(parallel, fn {k2, v2} ->
+      {"#{k1} cases; #{k2} parallel", {v1, v2}}
+    end)
+  end)
+  |> Map.new()
 
 Benchee.run(
   %{
-    "start_child/3 with PartitionSupervisor" => fn cases ->
-      ref = :rand.uniform(99_999_999_999)
-      name = MyPartitionSupervisor
+    "Ecto.Repo.insert/3" => fn {pids, {cases, parallel}} ->
+      child_spec =
+        Task.child_spec(fn -> :foo end)
 
-      {:ok, sup} =
-        PartitionSupervisor.start_link(
-          name: name,
-          partitions: 20,
-          child_spec:
-            HordePro.DynamicSupervisor.child_spec(
-              strategy: :one_for_one,
-              backend:
-                HordePro.Adapter.Postgres.SupervisorBackend.new(
-                  repo: HordeProTest.Repo,
-                  supervisor_id: "benchmark_#{ref}"
-                )
-            )
-        )
+      Task.async_stream(
+        cases,
+        fn n ->
+          HordePro.Child.encode(
+            %{supervisor_id: "123_123", lock_id: -2_329_838},
+            self(),
+            child_spec.start,
+            child_spec.restart,
+            5000,
+            :worker,
+            []
+          )
+          |> HordeProTest.Repo.insert()
+        end,
+        max_concurrency: parallel
+      )
+      |> Stream.run()
 
+      pids
+    end,
+    "Elixir.DynamicSupervisor.start_child/3" => fn {pids, {cases, parallel}} ->
       bench_pid = self()
 
-      cases
-      |> Task.async_stream(
+      Task.async_stream(
+        cases,
         fn n ->
           {:ok, _child_pid} =
-            HordePro.DynamicSupervisor.start_child(
-              {:via, PartitionSupervisor, {name, n}},
+            DynamicSupervisor.start_child(
+              {:via, PartitionSupervisor, {ElixirSupervisor, n}},
               {Task,
                fn ->
                  send(bench_pid, {:msg, n})
@@ -48,12 +71,11 @@ Benchee.run(
                end}
             )
         end,
-        max_concurrency: 20
+        max_concurrency: parallel * 2
       )
       |> Stream.run()
 
-      cases
-      |> Enum.each(fn n ->
+      Enum.each(cases, fn n ->
         receive do
           {:msg, ^n} -> :ok
         after
@@ -61,52 +83,78 @@ Benchee.run(
         end
       end)
 
-      Process.flag(:trap_exit, true)
-      Process.exit(sup, :kill)
-
-      receive do
-        {:EXIT, ^sup, :killed} -> :ok
-      after
-        5000 ->
-          raise "whoops!"
-      end
+      pids
     end,
-    "start_child/3" => fn cases ->
-      ref = :rand.uniform(99_999_999_999)
+    "HordePro.DynamicSupervisor.start_child/3" => fn {pids, {cases, parallel}} ->
+      bench_pid = self()
 
-      {:ok, sup} =
-        HordePro.DynamicSupervisor.start_link(
-          strategy: :one_for_one,
-          backend:
-            HordePro.Adapter.Postgres.SupervisorBackend.new(
-              repo: HordeProTest.Repo,
-              supervisor_id: "benchmark_#{ref}"
+      Task.async_stream(
+        cases,
+        fn n ->
+          {:ok, _child_pid} =
+            HordePro.DynamicSupervisor.start_child(
+              {:via, PartitionSupervisor, {HordeProSupervisor, n}},
+              {Task,
+               fn ->
+                 send(bench_pid, {:msg, n})
+                 Process.sleep(5000)
+               end}
             )
-        )
+        end,
+        max_concurrency: parallel * 2
+      )
+      |> Stream.run()
 
-      cases
-      |> Enum.each(fn _n ->
-        {:ok, _child_pid} =
-          HordePro.DynamicSupervisor.start_child(
-            sup,
-            {Task,
-             fn ->
-               1 / 1000
-               Process.sleep(5000)
-             end}
-          )
+      Enum.each(cases, fn n ->
+        receive do
+          {:msg, ^n} -> :ok
+        after
+          5000 -> raise "message not received"
+        end
       end)
 
+      pids
+    end
+  },
+  inputs: inputs,
+  before_each: fn {cases, parallel} ->
+    ref = :rand.uniform(99_999_999_999)
+
+    {:ok, sup1} =
+      PartitionSupervisor.start_link(
+        name: HordeProSupervisor,
+        partitions: parallel,
+        child_spec:
+          HordePro.DynamicSupervisor.child_spec(
+            strategy: :one_for_one,
+            backend:
+              HordePro.Adapter.Postgres.SupervisorBackend.new(
+                repo: HordeProTest.Repo,
+                supervisor_id: "benchmark_#{ref}"
+              )
+          )
+      )
+
+    {:ok, sup2} =
+      PartitionSupervisor.start_link(
+        name: ElixirSupervisor,
+        partitions: parallel,
+        child_spec: DynamicSupervisor.child_spec(strategy: :one_for_one)
+      )
+
+    {[sup1, sup2], {cases, parallel}}
+  end,
+  after_each: fn pids ->
+    Enum.each(pids, fn pid ->
       Process.flag(:trap_exit, true)
-      Process.exit(sup, :kill)
+      Process.exit(pid, :kill)
 
       receive do
-        {:EXIT, ^sup, :killed} -> :ok
+        {:EXIT, ^pid, :killed} -> :ok
       after
         5000 ->
           raise "whoops!"
       end
-    end
-  },
-  inputs: %{"thousand" => 1..1000}
+    end)
+  end
 )

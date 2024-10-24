@@ -54,7 +54,7 @@ defmodule HordePro.Adapter.Postgres.SupervisorBackend do
     end
     |> case do
       false ->
-        Process.sleep(200)
+        Process.sleep(20)
         assign_new_lock_id(t, attempts - 1)
 
       %{} = t ->
