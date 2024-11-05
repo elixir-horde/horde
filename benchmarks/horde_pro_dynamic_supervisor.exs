@@ -128,7 +128,7 @@ Benchee.run(
           HordePro.DynamicSupervisor.child_spec(
             strategy: :one_for_one,
             backend:
-              HordePro.Adapter.Postgres.SupervisorBackend.new(
+              HordePro.Adapter.Postgres.DynamicSupervisorBackend.new(
                 repo: HordeProTest.Repo,
                 supervisor_id: "benchmark_#{ref}"
               )

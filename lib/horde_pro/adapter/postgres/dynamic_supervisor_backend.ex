@@ -1,10 +1,10 @@
-defmodule HordePro.Adapter.Postgres.SupervisorBackend do
+defmodule HordePro.Adapter.Postgres.DynamicSupervisorBackend do
   defstruct([:repo, :supervisor_id, :locker_pid, :lock_id])
 
   import Ecto.Query, only: [from: 2]
 
   alias HordePro.Adapter.Postgres.Locker
-  alias HordePro.Adapter.Postgres.Manager
+  alias HordePro.Adapter.Postgres.DynamicSupervisorManager
   require Locker
 
   def new(opts) do
@@ -32,7 +32,7 @@ defmodule HordePro.Adapter.Postgres.SupervisorBackend do
 
   defp assign_manager(t) do
     {:ok, manager_pid} =
-      Manager.start_link(
+      DynamicSupervisorManager.start_link(
         locker_pid: t.locker_pid,
         repo: t.repo,
         lock_namespace: @lock_namespace,

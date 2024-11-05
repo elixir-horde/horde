@@ -1,4 +1,4 @@
-defmodule HordePro.Adapter.Postgres.Manager do
+defmodule HordePro.Adapter.Postgres.DynamicSupervisorManager do
   @moduledoc false
   use GenServer
 

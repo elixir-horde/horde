@@ -9,7 +9,7 @@ defmodule HordeProTest do
     Sup.child_spec(
       strategy: :one_for_one,
       backend:
-        HordePro.Adapter.Postgres.SupervisorBackend.new(
+        HordePro.Adapter.Postgres.DynamicSupervisorBackend.new(
           repo: HordeProTest.Repo,
           supervisor_id: sup_name
         )
@@ -21,7 +21,7 @@ defmodule HordeProTest do
       Sup.start_link(
         strategy: :one_for_one,
         backend:
-          HordePro.Adapter.Postgres.SupervisorBackend.new(
+          HordePro.Adapter.Postgres.DynamicSupervisorBackend.new(
             repo: HordeProTest.Repo,
             supervisor_id: name
           )
