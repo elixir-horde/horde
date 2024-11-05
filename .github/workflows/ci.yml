@@ -14,18 +14,12 @@ jobs:
       fail-fast: false
       matrix:
         elixir-version: [1.17, 1.16, 1.15, 1.14]
-        otp-version: [27, 26, 25, 24]
+        otp-version: [27, 26, 25]
         exclude:
-          - elixir-version: 1.13
-            otp-version: 26
           - elixir-version: 1.14
             otp-version: 27
           - elixir-version: 1.15
             otp-version: 27
-          - elixir-version: 1.16
-            otp-version: 24
-          - elixir-version: 1.17
-            otp-version: 24
 
     services:
       postgres:
