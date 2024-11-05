@@ -22,6 +22,10 @@ jobs:
             otp-version: 27
           - elixir-version: 1.15
             otp-version: 27
+          - elixir-version: 1.16
+            otp-version: 24
+          - elixir-version: 1.17
+            otp-version: 24
 
     services:
       postgres:
