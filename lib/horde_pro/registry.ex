@@ -181,6 +181,8 @@ defmodule HordePro.Registry do
   Note that the registry uses one ETS table plus two ETS tables per partition.
   """
 
+  alias HordePro.Enum2
+
   @keys [:unique, :duplicate]
   @all_info -1
   @key_info -2
@@ -390,7 +392,14 @@ defmodule HordePro.Registry do
       {@key_info, {keys, partitions, nil}} | meta
     ]
 
-    Registry.Supervisor.start_link(keys, name, partitions, listeners, entries, compressed)
+    HordePro.Registry.Supervisor.start_link(
+      keys,
+      name,
+      partitions,
+      listeners,
+      entries,
+      compressed
+    )
   end
 
   @doc false
@@ -674,7 +683,7 @@ defmodule HordePro.Registry do
       when is_atom(registry) and is_function(function, 0) do
     {_kind, partitions, _, pid_ets, _} = info!(registry)
     {pid_server, _pid_ets} = pid_ets || pid_ets!(registry, lock_key, partitions)
-    Registry.Partition.lock(pid_server, lock_key, function)
+    HordePro.Registry.Partition.lock(pid_server, lock_key, function)
   end
 
   @doc """
@@ -1250,7 +1259,7 @@ defmodule HordePro.Registry do
   def count(registry) when is_atom(registry) do
     case key_info!(registry) do
       {_kind, partitions, nil} ->
-        Enum.sum_by(0..(partitions - 1), fn partition_index ->
+        Enum2.sum_by(0..(partitions - 1), fn partition_index ->
           safe_size(key_ets!(registry, partition_index))
         end)
 
@@ -1326,7 +1335,7 @@ defmodule HordePro.Registry do
         :ets.select_count(key_ets, spec)
 
       {:duplicate, partitions, _key_ets} ->
-        Enum.sum_by(0..(partitions - 1), fn partition_index ->
+        Enum2.sum_by(0..(partitions - 1), fn partition_index ->
           :ets.select_count(key_ets!(registry, partition_index), spec)
         end)
     end
@@ -1419,7 +1428,7 @@ defmodule HordePro.Registry do
 
     case key_info!(registry) do
       {_kind, partitions, nil} ->
-        Enum.sum_by(0..(partitions - 1), fn partition_index ->
+        Enum2.sum_by(0..(partitions - 1), fn partition_index ->
           :ets.select_count(key_ets!(registry, partition_index), spec)
         end)
 
@@ -1525,223 +1534,223 @@ defmodule HordePro.Registry do
   defp reserved_atom?(_), do: false
 end
 
-# defmodule HordePro.Registry.Supervisor do
-#   @moduledoc false
-#   use Supervisor
+defmodule HordePro.Registry.Supervisor do
+  @moduledoc false
+  use Supervisor
 
-#   def start_link(kind, registry, partitions, listeners, entries, compressed) do
-#     arg = {kind, registry, partitions, listeners, entries, compressed}
-#     Supervisor.start_link(__MODULE__, arg, name: registry)
-#   end
+  def start_link(kind, registry, partitions, listeners, entries, compressed) do
+    arg = {kind, registry, partitions, listeners, entries, compressed}
+    Supervisor.start_link(__MODULE__, arg, name: registry)
+  end
 
-#   def init({kind, registry, partitions, listeners, entries, compressed}) do
-#     ^registry = :ets.new(registry, [:set, :public, :named_table, read_concurrency: true])
-#     true = :ets.insert(registry, entries)
+  def init({kind, registry, partitions, listeners, entries, compressed}) do
+    ^registry = :ets.new(registry, [:set, :public, :named_table, read_concurrency: true])
+    true = :ets.insert(registry, entries)
 
-#     children =
-#       for i <- 0..(partitions - 1) do
-#         key_partition = Registry.Partition.key_name(registry, i)
-#         pid_partition = Registry.Partition.pid_name(registry, i)
-#         arg = {kind, registry, i, partitions, key_partition, pid_partition, listeners, compressed}
+    children =
+      for i <- 0..(partitions - 1) do
+        key_partition = HordePro.Registry.Partition.key_name(registry, i)
+        pid_partition = HordePro.Registry.Partition.pid_name(registry, i)
+        arg = {kind, registry, i, partitions, key_partition, pid_partition, listeners, compressed}
 
-#         %{
-#           id: pid_partition,
-#           start: {Registry.Partition, :start_link, [pid_partition, arg]}
-#         }
-#       end
+        %{
+          id: pid_partition,
+          start: {HordePro.Registry.Partition, :start_link, [pid_partition, arg]}
+        }
+      end
 
-#     Supervisor.init(children, strategy: strategy_for_kind(kind))
-#   end
+    Supervisor.init(children, strategy: strategy_for_kind(kind))
+  end
 
-#   # Unique registries have their key partition hashed by key.
-#   # This means that, if a PID partition crashes, it may have
-#   # entries from all key partitions, so we need to crash all.
-#   defp strategy_for_kind(:unique), do: :one_for_all
+  # Unique registries have their key partition hashed by key.
+  # This means that, if a PID partition crashes, it may have
+  # entries from all key partitions, so we need to crash all.
+  defp strategy_for_kind(:unique), do: :one_for_all
 
-#   # Duplicate registries have both key and pid partitions hashed
-#   # by pid. This means that, if a PID partition crashes, all of
-#   # its associated entries are in its sibling table, so we crash one.
-#   defp strategy_for_kind(:duplicate), do: :one_for_one
-# end
+  # Duplicate registries have both key and pid partitions hashed
+  # by pid. This means that, if a PID partition crashes, all of
+  # its associated entries are in its sibling table, so we crash one.
+  defp strategy_for_kind(:duplicate), do: :one_for_one
+end
 
-# defmodule HordePro.Registry.Partition do
-#   @moduledoc false
+defmodule HordePro.Registry.Partition do
+  @moduledoc false
 
-#   # This process owns the equivalent key and pid ETS tables
-#   # and is responsible for linking to processes that map to
-#   # its own pid table.
-#   use GenServer
-#   @all_info -1
-#   @key_info -2
+  # This process owns the equivalent key and pid ETS tables
+  # and is responsible for linking to processes that map to
+  # its own pid table.
+  use GenServer
+  @all_info -1
+  @key_info -2
 
-#   @doc """
-#   Returns the name of key partition table.
-#   """
-#   @spec key_name(atom, non_neg_integer) :: atom
-#   def key_name(registry, partition) do
-#     Module.concat(registry, "KeyPartition" <> Integer.to_string(partition))
-#   end
+  @doc """
+  Returns the name of key partition table.
+  """
+  @spec key_name(atom, non_neg_integer) :: atom
+  def key_name(registry, partition) do
+    Module.concat(registry, "KeyPartition" <> Integer.to_string(partition))
+  end
 
-#   @doc """
-#   Returns the name of pid partition table.
-#   """
-#   @spec pid_name(atom, non_neg_integer) :: atom
-#   def pid_name(name, partition) do
-#     Module.concat(name, "PIDPartition" <> Integer.to_string(partition))
-#   end
+  @doc """
+  Returns the name of pid partition table.
+  """
+  @spec pid_name(atom, non_neg_integer) :: atom
+  def pid_name(name, partition) do
+    Module.concat(name, "PIDPartition" <> Integer.to_string(partition))
+  end
 
-#   @doc """
-#   Starts the registry partition.
+  @doc """
+  Starts the registry partition.
 
-#   The process is only responsible for linking and cleaning up when processes crash.
-#   """
-#   def start_link(registry, arg) do
-#     GenServer.start_link(__MODULE__, arg, name: registry)
-#   end
+  The process is only responsible for linking and cleaning up when processes crash.
+  """
+  def start_link(registry, arg) do
+    GenServer.start_link(__MODULE__, arg, name: registry)
+  end
 
-#   @doc """
-#   Runs function with a lock.
-#   """
-#   def lock(pid, key, lock) do
-#     ref = GenServer.call(pid, {:lock, key})
+  @doc """
+  Runs function with a lock.
+  """
+  def lock(pid, key, lock) do
+    ref = GenServer.call(pid, {:lock, key})
 
-#     try do
-#       lock.()
-#     after
-#       send(pid, {:unlock, key, ref})
-#     end
-#   end
+    try do
+      lock.()
+    after
+      send(pid, {:unlock, key, ref})
+    end
+  end
 
-#   ## Callbacks
+  ## Callbacks
 
-#   def init({kind, registry, i, partitions, key_partition, pid_partition, listeners, compressed}) do
-#     Process.flag(:trap_exit, true)
-#     key_ets = init_key_ets(kind, key_partition, compressed)
-#     pid_ets = init_pid_ets(kind, pid_partition)
+  def init({kind, registry, i, partitions, key_partition, pid_partition, listeners, compressed}) do
+    Process.flag(:trap_exit, true)
+    key_ets = init_key_ets(kind, key_partition, compressed)
+    pid_ets = init_pid_ets(kind, pid_partition)
 
-#     # If we have only one partition, we do an optimization which
-#     # is to write the table information alongside the registry info.
-#     if partitions == 1 do
-#       entries = [
-#         {@key_info, {kind, partitions, key_ets}},
-#         {@all_info, {kind, partitions, key_ets, {self(), pid_ets}, listeners}}
-#       ]
+    # If we have only one partition, we do an optimization which
+    # is to write the table information alongside the registry info.
+    if partitions == 1 do
+      entries = [
+        {@key_info, {kind, partitions, key_ets}},
+        {@all_info, {kind, partitions, key_ets, {self(), pid_ets}, listeners}}
+      ]
 
-#       true = :ets.insert(registry, entries)
-#     else
-#       true = :ets.insert(registry, {i, key_ets, {self(), pid_ets}})
-#     end
+      true = :ets.insert(registry, entries)
+    else
+      true = :ets.insert(registry, {i, key_ets, {self(), pid_ets}})
+    end
 
-#     {:ok, {pid_ets, %{}}}
-#   end
+    {:ok, {pid_ets, %{}}}
+  end
 
-#   # The key partition is a set for unique keys,
-#   # duplicate bag for duplicate ones.
-#   defp init_key_ets(:unique, key_partition, compressed) do
-#     opts = [:set, :public, read_concurrency: true, write_concurrency: true]
-#     :ets.new(key_partition, compression_opt(opts, compressed))
-#   end
+  # The key partition is a set for unique keys,
+  # duplicate bag for duplicate ones.
+  defp init_key_ets(:unique, key_partition, compressed) do
+    opts = [:set, :public, read_concurrency: true, write_concurrency: true]
+    :ets.new(key_partition, compression_opt(opts, compressed))
+  end
 
-#   defp init_key_ets(:duplicate, key_partition, compressed) do
-#     opts = [:duplicate_bag, :public, read_concurrency: true, write_concurrency: true]
-#     :ets.new(key_partition, compression_opt(opts, compressed))
-#   end
+  defp init_key_ets(:duplicate, key_partition, compressed) do
+    opts = [:duplicate_bag, :public, read_concurrency: true, write_concurrency: true]
+    :ets.new(key_partition, compression_opt(opts, compressed))
+  end
 
-#   defp compression_opt(opts, compressed) do
-#     if compressed, do: [:compressed] ++ opts, else: opts
-#   end
+  defp compression_opt(opts, compressed) do
+    if compressed, do: [:compressed] ++ opts, else: opts
+  end
 
-#   # A process can always have multiple keys, so the
-#   # pid partition is always a duplicate bag.
-#   defp init_pid_ets(_, pid_partition) do
-#     :ets.new(pid_partition, [
-#       :duplicate_bag,
-#       :public,
-#       read_concurrency: true,
-#       write_concurrency: true
-#     ])
-#   end
+  # A process can always have multiple keys, so the
+  # pid partition is always a duplicate bag.
+  defp init_pid_ets(_, pid_partition) do
+    :ets.new(pid_partition, [
+      :duplicate_bag,
+      :public,
+      read_concurrency: true,
+      write_concurrency: true
+    ])
+  end
 
-#   def handle_call(:sync, _, state) do
-#     {:reply, :ok, state}
-#   end
+  def handle_call(:sync, _, state) do
+    {:reply, :ok, state}
+  end
 
-#   def handle_call({:lock, key}, from, {ets, lock}) do
-#     lock =
-#       case lock do
-#         %{^key => queue} ->
-#           Map.put(lock, key, :queue.in(from, queue))
+  def handle_call({:lock, key}, from, {ets, lock}) do
+    lock =
+      case lock do
+        %{^key => queue} ->
+          Map.put(lock, key, :queue.in(from, queue))
 
-#         %{} ->
-#           go(from, key)
-#           Map.put(lock, key, :queue.new())
-#       end
+        %{} ->
+          go(from, key)
+          Map.put(lock, key, :queue.new())
+      end
 
-#     {:noreply, {ets, lock}}
-#   end
+    {:noreply, {ets, lock}}
+  end
 
-#   def handle_info({:EXIT, pid, _reason}, {ets, lock}) do
-#     entries = :ets.take(ets, pid)
+  def handle_info({:EXIT, pid, _reason}, {ets, lock}) do
+    entries = :ets.take(ets, pid)
 
-#     for {_pid, key, key_ets, _counter} <- entries do
-#       key_ets =
-#         case key_ets do
-#           # In case the fake key_ets is being used. See unregister_match/2.
-#           {key_ets, _} ->
-#             key_ets
+    for {_pid, key, key_ets, _counter} <- entries do
+      key_ets =
+        case key_ets do
+          # In case the fake key_ets is being used. See unregister_match/2.
+          {key_ets, _} ->
+            key_ets
 
-#           _ ->
-#             key_ets
-#         end
+          _ ->
+            key_ets
+        end
 
-#       try do
-#         Registry.__unregister__(key_ets, {key, {pid, :_}}, 1)
-#       catch
-#         :error, :badarg -> :badarg
-#       end
-#     end
+      try do
+        Registry.__unregister__(key_ets, {key, {pid, :_}}, 1)
+      catch
+        :error, :badarg -> :badarg
+      end
+    end
 
-#     {:noreply, {ets, lock}}
-#   end
+    {:noreply, {ets, lock}}
+  end
 
-#   def handle_info({{:unlock, key}, _ref, :process, _pid, _reason}, state) do
-#     unlock(key, state)
-#   end
+  def handle_info({{:unlock, key}, _ref, :process, _pid, _reason}, state) do
+    unlock(key, state)
+  end
 
-#   def handle_info({:unlock, key, ref}, state) do
-#     Process.demonitor(ref, [:flush])
-#     unlock(key, state)
-#   end
+  def handle_info({:unlock, key, ref}, state) do
+    Process.demonitor(ref, [:flush])
+    unlock(key, state)
+  end
 
-#   defp unlock(key, {ets, lock}) do
-#     %{^key => queue} = lock
+  defp unlock(key, {ets, lock}) do
+    %{^key => queue} = lock
 
-#     lock =
-#       case dequeue(queue, key) do
-#         :empty -> Map.delete(lock, key)
-#         {:not_empty, queue} -> Map.put(lock, key, queue)
-#       end
+    lock =
+      case dequeue(queue, key) do
+        :empty -> Map.delete(lock, key)
+        {:not_empty, queue} -> Map.put(lock, key, queue)
+      end
 
-#     {:noreply, {ets, lock}}
-#   end
+    {:noreply, {ets, lock}}
+  end
 
-#   defp dequeue(queue, key) do
-#     case :queue.out(queue) do
-#       {:empty, _} ->
-#         :empty
+  defp dequeue(queue, key) do
+    case :queue.out(queue) do
+      {:empty, _} ->
+        :empty
 
-#       {{:value, {pid, _tag} = from}, queue} ->
-#         if node(pid) != node() or Process.alive?(pid) do
-#           go(from, key)
-#           {:not_empty, queue}
-#         else
-#           dequeue(queue, key)
-#         end
-#     end
-#   end
+      {{:value, {pid, _tag} = from}, queue} ->
+        if node(pid) != node() or Process.alive?(pid) do
+          go(from, key)
+          {:not_empty, queue}
+        else
+          dequeue(queue, key)
+        end
+    end
+  end
 
-#   defp go({pid, _tag} = from, key) do
-#     ref = Process.monitor(pid, tag: {:unlock, key})
-#     GenServer.reply(from, ref)
-#   end
-# end
+  defp go({pid, _tag} = from, key) do
+    ref = Process.monitor(pid, tag: {:unlock, key})
+    GenServer.reply(from, ref)
+  end
+end
