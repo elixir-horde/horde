@@ -7,6 +7,8 @@
 # - Events are properly serialized (meaning: inserts will be ordered correctly; no possibility to insert record 2 before record 1 has been completely inserted). This means we will have to do some funny business with locks. But it should be very performant, able to process tens of thousands of insertions per second.
 # - The rest of the Registry will be copied from Elixir.Registry. We will try the same approach as HordePro.DynamicSupervisor, where we shim our additions in.
 #
+# TODO later, locking / unlocking (can do this with advisory locks)
+#
 defmodule HordePro.Registry do
   @moduledoc ~S"""
   A local, decentralized and scalable key-value process storage.
@@ -182,6 +184,7 @@ defmodule HordePro.Registry do
   """
 
   alias HordePro.Enum2
+  alias HordePro.RegistryBackend
 
   @keys [:unique, :duplicate]
   @all_info -1
@@ -1114,16 +1117,36 @@ defmodule HordePro.Registry do
   end
 
   defp register_key(:duplicate, key_ets, _key, entry) do
+    RegistryBackend.register_key(:duplicate, _key_ets, entry)
+    # TODO insert here
     true = :ets.insert(key_ets, entry)
     :ok
   end
 
   defp register_key(:unique, key_ets, key, entry) do
+    # TODO insert here
     if :ets.insert_new(key_ets, entry) do
       :ok
     else
       # Note that we have to call register_key recursively
       # because we are always at odds of a race condition.
+
+      # TODO what to do about far-away process? race conditions are possible!
+      # The race condition is: process dies, but the registry hasn't updated yet.
+      # Because we always need to send back the currently existing pid?
+      # Why is this a requirement?
+      #
+      # Race #1:
+      # 1. process dies
+      # 2. we try to register our process
+      # 3. process deregisters
+      #
+      # Race #2:
+      # 1. we try to register our process
+      # 2. process dies
+      # 3. now the process still isn't alive!
+      #
+      # Do we even care?
       case :ets.lookup(key_ets, key) do
         [{^key, {pid, _}} = current] ->
           if Process.alive?(pid) do
@@ -1518,6 +1541,8 @@ defmodule HordePro.Registry do
   @doc false
   def __unregister__(table, match, pos) do
     key = :erlang.element(pos, match)
+
+    # TODO delete here
 
     # We need to perform an element comparison if we have an special atom key.
     if is_atom(key) and reserved_atom?(Atom.to_string(key)) do
