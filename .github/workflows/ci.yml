@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        elixir-version: [1.15, 1.14]
+        elixir-version: [1.17, 1.16, 1.15, 1.14]
         otp-version: [27, 26, 25, 24]
         exclude:
           - elixir-version: 1.13
