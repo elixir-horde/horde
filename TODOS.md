@@ -6,3 +6,7 @@
   - getting started guide
 - write mix task to copy migrations into repo migrations folder
 - optimize tables with indexes
+
+## Considering
+- HordePro.Supervisor
+  - I have seen this being requested a number of times. Sometimes people want to start a static list of processes and have them be uniformly distributed across their cluster. Perhaps we can meet this use case.
