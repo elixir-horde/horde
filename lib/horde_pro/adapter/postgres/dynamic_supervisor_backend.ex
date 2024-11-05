@@ -89,7 +89,7 @@ defmodule HordePro.Adapter.Postgres.DynamicSupervisorBackend do
   defp maybe_empty_process_table(t) do
     Locker.with_lock t.locker_pid, @global_lock do
       all_locks =
-        from(c in HordePro.Child,
+        from(c in HordePro.DynamicSupervisorChild,
           distinct: c.lock_id,
           select: c.lock_id,
           where: c.supervisor_id == ^t.supervisor_id,
@@ -104,7 +104,7 @@ defmodule HordePro.Adapter.Postgres.DynamicSupervisorBackend do
         end)
 
       if all_locks != [] and all_locks? do
-        from(c in HordePro.Child, where: c.supervisor_id == ^t.supervisor_id)
+        from(c in HordePro.DynamicSupervisorChild, where: c.supervisor_id == ^t.supervisor_id)
         |> t.repo.delete_all()
       end
 
@@ -118,7 +118,7 @@ defmodule HordePro.Adapter.Postgres.DynamicSupervisorBackend do
 
   def save_child(t, pid, mfa, restart, shutdown, type, modules) do
     {:ok, _} =
-      HordePro.Child.encode(t, pid, mfa, restart, shutdown, type, modules)
+      HordePro.DynamicSupervisorChild.encode(t, pid, mfa, restart, shutdown, type, modules)
       |> t.repo.insert()
 
     :ok
@@ -128,7 +128,7 @@ defmodule HordePro.Adapter.Postgres.DynamicSupervisorBackend do
     binary_pid = :erlang.term_to_binary(pid)
 
     {1, nil} =
-      from(c in HordePro.Child,
+      from(c in HordePro.DynamicSupervisorChild,
         where: c.pid == ^binary_pid,
         where: c.lock_id == ^t.lock_id,
         where: c.supervisor_id == ^t.supervisor_id

@@ -12,5 +12,8 @@ watch:
 migrate:
   MIX_ENV=test mix ecto.migrate -r HordeProTest.Repo
 
+db_reset:
+  MIX_ENV=test mix do ecto.drop -r HordeProTest.Repo, ecto.create -r HordeProTest.Repo, ecto.migrate -r HordeProTest.Repo
+
 gen_migration MIG:
   MIX_ENV=test mix ecto.gen.migration -r HordeProTest.Repo {{MIG}}

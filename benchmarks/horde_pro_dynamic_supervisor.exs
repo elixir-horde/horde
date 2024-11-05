@@ -38,7 +38,7 @@ Benchee.run(
       Task.async_stream(
         cases,
         fn n ->
-          HordePro.Child.encode(
+          HordePro.DynamicSupervisorChild.encode(
             %{supervisor_id: "123_123", lock_id: -2_329_838},
             self(),
             child_spec.start,
