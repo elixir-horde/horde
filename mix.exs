@@ -39,7 +39,8 @@ defmodule HordePro.MixProject do
       {:ecto_sql, "~> 3.10"},
       {:postgrex, "~> 0.17"},
       {:benchee, "~> 1.3", only: :dev},
-      {:ex_doc, "> 0.0.0", only: :dev}
+      {:ex_doc, "> 0.0.0", only: :dev},
+      {:sql_fmt, "> 0.0.0", only: [:dev, :test]}
     ]
   end
 end

@@ -1,4 +1,4 @@
-defmodule HordeProTest do
+defmodule HordePro.DynamicSupervisorTest do
   use ExUnit.Case
 
   doctest HordePro
