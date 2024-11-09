@@ -1,8 +1,24 @@
-defmodule HordePro.RegistryBackend do
-  # import SqlFmt.Helpers
+defmodule HordePro.Adapter.Postgres.RegistryBackend do
+  @moduledoc false
+
   import SqlFmt.Helpers
 
-  def register_key(horde_name, repo, kind, key_ets, key, {key, {pid, value}}) do
+  defstruct([:repo, :registry_id, :partition, :locker_pid, :lock_id])
+
+  def new(opts) do
+    struct!(__MODULE__, opts |> Enum.into(%{}))
+  end
+
+  @doc """
+  This function is called once to set up what can be set up from the RegistrySupervisor init function.
+
+  The output is intended for `init_partition/2`
+  """
+  def init(t, opts) do
+    struct!(t, opts |> Enum.into(%{}))
+  end
+
+  def register_key(backend, kind, _key_ets, key, {key, {pid, value}}) do
     # 1. write the key, and write the event
     # 2. also need to make sure we are up to date with events. So we write the event, and then also ask for all events between the last one we saw, and the one we just inserted.
     query = ~SQL"""
@@ -60,7 +76,7 @@ defmodule HordePro.RegistryBackend do
     """
 
     params = [
-      _registry_id = horde_name,
+      _registry_id = backend.registry_id <> backend.partition,
       :erlang.term_to_binary(key),
       :erlang.term_to_binary(pid),
       :erlang.term_to_binary(value),
@@ -69,15 +85,19 @@ defmodule HordePro.RegistryBackend do
       _last_event_counter = 0
     ]
 
-    Ecto.Adapters.SQL.query(repo, query, params)
-    |> IO.inspect(label: "QUERY")
+    rows =
+      case _result = Ecto.Adapters.SQL.query(backend.repo, query, params) do
+        {:ok, %{rows: rows}} -> rows
+      end
 
-    IO.inspect(repo)
-    IO.inspect(kind)
-    IO.inspect(key_ets)
-    IO.inspect(key)
-    IO.inspect(pid)
-    IO.inspect(value)
-    :ok
+    # IO.inspect(result, label: "RESULT")
+    # IO.inspect(backend.repo)
+    # IO.inspect(kind)
+    # IO.inspect(key_ets)
+    # IO.inspect(key)
+    # IO.inspect(pid)
+    # IO.inspect(value)
+    IO.inspect(rows, label: "ROWS")
+    {:ok, rows}
   end
 end
