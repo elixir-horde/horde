@@ -8,7 +8,7 @@ defmodule HordePro.RegistryBackend do
     query = ~SQL"""
     WITH events_index AS (
       SELECT
-        MAX(event_counter) AS max_counter
+        COALESCE(MAX(event_counter), 0) AS max_counter
       FROM
         horde_pro_registry_events
       WHERE
@@ -31,15 +31,32 @@ defmodule HordePro.RegistryBackend do
       VALUES
         (
           $1,
-          events_index.max_counter + 1,
-          "register_key",
-          $5
+          (
+            SELECT
+              max_counter
+            FROM
+              events_index
+          ) + 1,
+          'register_key',
+          $6
         )
+      RETURNING
+        *
     )
     SELECT
       *
     FROM
       horde_pro_registry_events
+    WHERE
+      registry_id = $1
+      AND event_counter > $7
+    UNION
+    SELECT
+      *
+    FROM
+      new_events
+    ORDER BY
+      event_counter ASC
     """
 
     params = [
@@ -51,25 +68,6 @@ defmodule HordePro.RegistryBackend do
       :erlang.term_to_binary(_event_body = ""),
       _last_event_counter = 0
     ]
-
-    # query = ~SQL"""
-    # WITH mmm AS (
-    #   SELECT
-    #     event_counter
-    #   FROM
-    #     horde_pro_registry_events
-    #   ORDER BY
-    #     event_counter DESC
-    #   LIMIT
-    #     1
-    # )
-    # SELECT
-    #   *
-    # FROM
-    #   mmm
-    # """
-
-    # params = []
 
     Ecto.Adapters.SQL.query(repo, query, params)
     |> IO.inspect(label: "QUERY")

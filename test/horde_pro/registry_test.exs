@@ -10,7 +10,8 @@ defmodule HordePro.RegistryTest do
     {:ok, _reg} =
       Reg.start_link(name: name, keys: :unique, partitions: 4, repo: HordeProTest.Repo)
 
-    assert {:ok, _owner_pid} = Reg.register(name, "hello", "here I am")
-    assert [{^pid, "here I am"}] = Reg.lookup(name, "hello")
+    key = :rand.uniform(10_000_000_000_000) |> to_string()
+    assert {:ok, _owner_pid} = Reg.register(name, key, "here I am")
+    assert [{^pid, "here I am"}] = Reg.lookup(name, key)
   end
 end
