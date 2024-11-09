@@ -2,7 +2,7 @@ defmodule HordePro.RegistryBackend do
   # import SqlFmt.Helpers
   import SqlFmt.Helpers
 
-  def register_key(repo, kind, key_ets, key, {key, {pid, value}}) do
+  def register_key(horde_name, repo, kind, key_ets, key, {key, {pid, value}}) do
     # 1. write the key, and write the event
     # 2. also need to make sure we are up to date with events. So we write the event, and then also ask for all events between the last one we saw, and the one we just inserted.
     query = ~SQL"""
@@ -60,7 +60,7 @@ defmodule HordePro.RegistryBackend do
     """
 
     params = [
-      _registry_id = "",
+      _registry_id = horde_name,
       :erlang.term_to_binary(key),
       :erlang.term_to_binary(pid),
       :erlang.term_to_binary(value),

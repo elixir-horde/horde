@@ -363,6 +363,8 @@ defmodule HordePro.Registry do
           raise ArgumentError, "expected :name option to be present"
       end
 
+    horde_name = Keyword.get(options, :horde_name, name) |> to_string()
+
     meta = Keyword.get(options, :meta, [])
 
     if not Keyword.keyword?(meta) do
@@ -399,7 +401,7 @@ defmodule HordePro.Registry do
 
     # The @info format must be kept in sync with Registry.Partition optimization.
     entries = [
-      {@all_info, {keys, partitions, nil, nil, listeners, repo}},
+      {@all_info, {keys, partitions, nil, nil, listeners, horde_name, repo}},
       {@key_info, {keys, partitions, nil}} | meta
     ]
 
@@ -409,8 +411,9 @@ defmodule HordePro.Registry do
       partitions,
       listeners,
       entries,
-      repo,
-      compressed
+      compressed,
+      horde_name,
+      repo
     )
   end
 
@@ -1093,7 +1096,7 @@ defmodule HordePro.Registry do
   @spec register(registry, key, value) :: {:ok, pid} | {:error, {:already_registered, pid}}
   def register(registry, key, value) when is_atom(registry) do
     self = self()
-    {kind, partitions, key_ets, pid_ets, listeners, repo} = info!(registry)
+    {kind, partitions, key_ets, pid_ets, listeners, horde_name, repo} = info!(registry)
     {key_partition, pid_partition} = partitions(kind, key, self, partitions)
     key_ets = key_ets || key_ets!(registry, key_partition)
     {pid_server, pid_ets} = pid_ets || pid_ets!(registry, pid_partition)
@@ -1106,7 +1109,15 @@ defmodule HordePro.Registry do
     counter = System.unique_integer()
     true = :ets.insert(pid_ets, {self, key, key_ets, counter})
 
-    with :ok <- RegistryBackend.register_key(repo, kind, key_ets, key, {key, {self, value}}),
+    with :ok <-
+           RegistryBackend.register_key(
+             horde_name,
+             repo,
+             kind,
+             key_ets,
+             key,
+             {key, {self, value}}
+           ),
          :ok <- register_key(kind, key_ets, key, {key, {self, value}}) do
       for listener <- listeners do
         Kernel.send(listener, {:register, registry, key, self, value})
@@ -1569,12 +1580,12 @@ defmodule HordePro.Registry.Supervisor do
   @moduledoc false
   use Supervisor
 
-  def start_link(kind, registry, partitions, listeners, entries, repo, compressed) do
-    arg = {kind, registry, partitions, listeners, entries, repo, compressed}
+  def start_link(kind, registry, partitions, listeners, entries, compressed, horde_name, repo) do
+    arg = {kind, registry, partitions, listeners, entries, compressed, horde_name, repo}
     Supervisor.start_link(__MODULE__, arg, name: registry)
   end
 
-  def init({kind, registry, partitions, listeners, entries, repo, compressed}) do
+  def init({kind, registry, partitions, listeners, entries, compressed, horde_name, repo}) do
     ^registry = :ets.new(registry, [:set, :public, :named_table, read_concurrency: true])
     true = :ets.insert(registry, entries)
 
@@ -1584,8 +1595,8 @@ defmodule HordePro.Registry.Supervisor do
         pid_partition = HordePro.Registry.Partition.pid_name(registry, i)
 
         arg =
-          {kind, registry, i, partitions, key_partition, pid_partition, listeners, repo,
-           compressed}
+          {kind, registry, i, partitions, key_partition, pid_partition, listeners, compressed,
+           horde_name, repo}
 
         %{
           id: pid_partition,
@@ -1658,7 +1669,8 @@ defmodule HordePro.Registry.Partition do
   ## Callbacks
 
   def init(
-        {kind, registry, i, partitions, key_partition, pid_partition, listeners, repo, compressed}
+        {kind, registry, i, partitions, key_partition, pid_partition, listeners, compressed,
+         horde_name, repo}
       ) do
     Process.flag(:trap_exit, true)
     key_ets = init_key_ets(kind, key_partition, compressed)
@@ -1669,7 +1681,7 @@ defmodule HordePro.Registry.Partition do
     if partitions == 1 do
       entries = [
         {@key_info, {kind, partitions, key_ets}},
-        {@all_info, {kind, partitions, key_ets, {self(), pid_ets}, listeners, repo}}
+        {@all_info, {kind, partitions, key_ets, {self(), pid_ets}, listeners, horde_name, repo}}
       ]
 
       true = :ets.insert(registry, entries)
