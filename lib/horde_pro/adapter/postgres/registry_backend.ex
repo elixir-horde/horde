@@ -21,6 +21,24 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
   def register_key(backend, kind, _key_ets, key, {key, {pid, value}}) do
     # 1. write the key, and write the event
     # 2. also need to make sure we are up to date with events. So we write the event, and then also ask for all events between the last one we saw, and the one we just inserted.
+    event = %{
+      type: :insert_key,
+      kind: kind,
+      key: key,
+      pid: pid,
+      value: value
+    }
+
+    params = [
+      _registry_id = backend.registry_id <> backend.partition,
+      _key = :erlang.term_to_binary(key),
+      _pid = :erlang.term_to_binary(pid),
+      _value = :erlang.term_to_binary(value),
+      _unique = kind == :unique,
+      _event = :erlang.term_to_binary(event),
+      _last_event_counter = 0
+    ]
+
     query = ~SQL"""
     WITH events_index AS (
       SELECT
@@ -38,12 +56,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     ),
     new_events AS (
       INSERT INTO
-        horde_pro_registry_events (
-          registry_id,
-          event_counter,
-          event_type,
-          event_body
-        )
+        horde_pro_registry_events (registry_id, event_counter, event_body)
       VALUES
         (
           $1,
@@ -53,14 +66,14 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
             FROM
               events_index
           ) + 1,
-          'register_key',
           $6
         )
       RETURNING
         *
     )
     SELECT
-      *
+      event_body,
+      event_counter
     FROM
       horde_pro_registry_events
     WHERE
@@ -68,36 +81,22 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       AND event_counter > $7
     UNION
     SELECT
-      *
+      event_body,
+      event_counter
     FROM
       new_events
     ORDER BY
       event_counter ASC
     """
 
-    params = [
-      _registry_id = backend.registry_id <> backend.partition,
-      :erlang.term_to_binary(key),
-      :erlang.term_to_binary(pid),
-      :erlang.term_to_binary(value),
-      kind == :unique,
-      :erlang.term_to_binary(_event_body = ""),
-      _last_event_counter = 0
-    ]
-
-    rows =
+    events =
       case _result = Ecto.Adapters.SQL.query(backend.repo, query, params) do
         {:ok, %{rows: rows}} -> rows
       end
+      |> Enum.map(fn [event_body, _event_counter] ->
+        :erlang.binary_to_term(event_body)
+      end)
 
-    # IO.inspect(result, label: "RESULT")
-    # IO.inspect(backend.repo)
-    # IO.inspect(kind)
-    # IO.inspect(key_ets)
-    # IO.inspect(key)
-    # IO.inspect(pid)
-    # IO.inspect(value)
-    IO.inspect(rows, label: "ROWS")
-    {:ok, rows}
+    {:ok, events}
   end
 end

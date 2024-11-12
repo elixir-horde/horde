@@ -7,11 +7,10 @@ defmodule HordePro.Registry.Event do
   schema "horde_pro_registry_events" do
     field(:registry_id, :string)
     field(:event_counter, :integer)
-    field(:event_type, :string)
     field(:event_body, :binary)
   end
 
   def changeset(event, params) do
-    cast(event, params, [])
+    cast(event, params, [:registry_id, :event_counter, :event_body])
   end
 end

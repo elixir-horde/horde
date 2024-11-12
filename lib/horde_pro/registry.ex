@@ -1110,21 +1110,18 @@ defmodule HordePro.Registry do
     counter = System.unique_integer()
     true = :ets.insert(pid_ets, {self, key, key_ets, counter})
 
-    with :ok <-
-           HordePro.Adapter.Postgres.RegistryBackend.register_key(
-             backend,
-             kind,
-             key_ets,
-             key,
-             {key, {self, value}}
-           ),
-         :ok <- register_key(kind, key_ets, key, {key, {self, value}}) do
-      for listener <- listeners do
-        Kernel.send(listener, {:register, registry, key, self, value})
-      end
+    case HordePro.Adapter.Postgres.RegistryBackend.register_key(
+           backend,
+           kind,
+           key_ets,
+           key,
+           {key, {self, value}}
+         ) do
+      {:ok, events} ->
+        :ok = replay_events(registry, key_ets, events, listeners)
 
-      {:ok, pid_server}
-    else
+        {:ok, pid_server}
+
       {:error, {:already_registered, ^self}} = error ->
         true = :ets.delete_object(pid_ets, {self, key, key_ets, counter})
         error
@@ -1134,6 +1131,30 @@ defmodule HordePro.Registry do
         unlink_if_unregistered(pid_server, pid_ets, self)
         error
     end
+  end
+
+  defp replay_events(registry, key_ets, events, listeners) do
+    #
+    # TODO
+    #
+    # Consider how to make sure that this always goes in the correct order.
+    # We might have to bring it into the Genserver RegistryManager
+    #
+
+    # event = %{
+    #   type: :insert_key,
+    #   kind: kind,
+    #   key: key,
+    #   pid: pid,
+    #   value: value
+    # }
+    Enum.each(events, fn %{type: :insert_key} = event ->
+      register_key(event.kind, key_ets, event.key, {event.key, {event.pid, event.value}})
+
+      for listener <- listeners do
+        Kernel.send(listener, {:register, registry, event.key, event.pid, event.value})
+      end
+    end)
   end
 
   defp register_key(:duplicate, key_ets, _key, entry) do
