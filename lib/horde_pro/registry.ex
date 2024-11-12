@@ -937,8 +937,9 @@ defmodule HordePro.Registry do
   @spec unregister(registry, key) :: :ok
   def unregister(registry, key) when is_atom(registry) do
     self = self()
-    {kind, partitions, key_ets, pid_ets, listeners} = info!(registry)
+    {kind, partitions, key_ets, pid_ets, listeners, backend} = info!(registry)
     {key_partition, pid_partition} = partitions(kind, key, self, partitions)
+    backend = backend || backend!(registry, key_partition)
     key_ets = key_ets || key_ets!(registry, key_partition)
     {pid_server, pid_ets} = pid_ets || pid_ets!(registry, pid_partition)
 
@@ -946,9 +947,12 @@ defmodule HordePro.Registry do
     # the pid_ets will still be able to clean up. The last step is
     # to clean if we have no more entries.
     true = __unregister__(key_ets, {key, {self, :_}}, 1)
-    true = __unregister__(pid_ets, {self, key, key_ets, :_}, 2)
 
-    unlink_if_unregistered(pid_server, pid_ets, self)
+    HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, fn ->
+      true = __unregister__(pid_ets, {self, key, key_ets, :_}, 2)
+
+      unlink_if_unregistered(pid_server, pid_ets, self)
+    end)
 
     for listener <- listeners do
       Kernel.send(listener, {:unregister, registry, key, self})
@@ -1715,7 +1719,7 @@ defmodule HordePro.Registry.Partition do
       true = :ets.insert(registry, {i, key_ets, {self(), pid_ets}, backend})
     end
 
-    {:ok, {pid_ets, %{}}}
+    {:ok, {pid_ets, backend, %{}}}
   end
 
   # The key partition is a set for unique keys,
@@ -1749,7 +1753,7 @@ defmodule HordePro.Registry.Partition do
     {:reply, :ok, state}
   end
 
-  def handle_call({:lock, key}, from, {ets, lock}) do
+  def handle_call({:lock, key}, from, {ets, _backend, lock}) do
     lock =
       case lock do
         %{^key => queue} ->
@@ -1763,7 +1767,7 @@ defmodule HordePro.Registry.Partition do
     {:noreply, {ets, lock}}
   end
 
-  def handle_info({:EXIT, pid, _reason}, {ets, lock}) do
+  def handle_info({:EXIT, pid, _reason}, {ets, backend, lock}) do
     entries = :ets.take(ets, pid)
 
     for {_pid, key, key_ets, _counter} <- entries do
@@ -1778,6 +1782,7 @@ defmodule HordePro.Registry.Partition do
         end
 
       try do
+        HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, pid)
         Registry.__unregister__(key_ets, {key, {pid, :_}}, 1)
       catch
         :error, :badarg -> :badarg

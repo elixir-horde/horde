@@ -9,6 +9,9 @@ bench:
 watch:
   watchexec -r --clear=reset --project-origin=. --stop-timeout=0 MIX_ENV=test mix do compile --warnings-as-errors, test
 
+watch2:
+  watchexec -r --clear=reset --project-origin=. --stop-timeout=0 MIX_ENV=test mix do compile --warnings-as-errors, test test/horde_pro/registry_test.exs
+
 migrate:
   MIX_ENV=test mix ecto.migrate -r HordeProTest.Repo
 

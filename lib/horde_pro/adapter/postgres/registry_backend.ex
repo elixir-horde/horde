@@ -99,4 +99,8 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
 
     {:ok, events}
   end
+
+  def unregister_key(_backend, fun) do
+    fun.()
+  end
 end

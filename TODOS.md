@@ -15,3 +15,9 @@
 ## Considering
 - HordePro.Supervisor
   - I have seen this being requested a number of times. Sometimes people want to start a static list of processes and have them be uniformly distributed across their cluster. Perhaps we can meet this use case.
+
+UNREGISTER
+- unregister/2
+- unregister_match/4
+- handle_info({:EXIT, pid, _reason}) (process dies)
+
