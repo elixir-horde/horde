@@ -1,8 +1,6 @@
 defmodule HordePro.Adapter.Postgres.RegistryBackend do
   @moduledoc false
 
-  import SqlFmt.Helpers
-
   alias HordePro.Adapter.Postgres.RegistryManager
 
   defstruct([:repo, :registry_id, :partition, :locker_pid, :lock_id])
@@ -57,6 +55,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       _last_event_counter = 0
     ]
 
+    # import SqlFmt.Helpers
     query = """
     WITH events_index AS (
       SELECT
