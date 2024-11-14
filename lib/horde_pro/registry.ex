@@ -3,7 +3,7 @@
 #
 # - We keep a full record of the registry on each local node.
 # - This record is built from a single stream of events, which reside in the database.
-# - Every [interval] we pull the events we don't have yet
+# - Every [interval] we pull the events we don't have yet (NB: or use LISTEN/NOTIFY)
 # - Events are properly serialized (meaning: inserts will be ordered correctly; no possibility to insert record 2 before record 1 has been completely inserted). This means we will have to do some funny business with locks. But it should be very performant, able to process tens of thousands of insertions per second.
 # - The rest of the Registry will be copied from Elixir.Registry. We will try the same approach as HordePro.DynamicSupervisor, where we shim our additions in.
 #
@@ -1767,7 +1767,7 @@ defmodule HordePro.Registry.Partition do
     {:noreply, {ets, lock}}
   end
 
-  def handle_info({:EXIT, pid, _reason}, {ets, backend, lock}) do
+  def handle_info({:EXIT, pid, _reason}, {ets, _backend, lock}) do
     entries = :ets.take(ets, pid)
 
     for {_pid, key, key_ets, _counter} <- entries do
@@ -1782,7 +1782,7 @@ defmodule HordePro.Registry.Partition do
         end
 
       try do
-        HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, pid)
+        # HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, pid)
         Registry.__unregister__(key_ets, {key, {pid, :_}}, 1)
       catch
         :error, :badarg -> :badarg
@@ -1799,6 +1799,10 @@ defmodule HordePro.Registry.Partition do
   def handle_info({:unlock, key, ref}, state) do
     Process.demonitor(ref, [:flush])
     unlock(key, state)
+  end
+
+  def terminate(_, {_ets, backend, _lock}) do
+    HordePro.Adapter.Postgres.RegistryBackend.terminate(backend)
   end
 
   defp unlock(key, {ets, lock}) do

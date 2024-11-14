@@ -3,6 +3,8 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
 
   import SqlFmt.Helpers
 
+  alias HordePro.Adapter.Postgres.RegistryManager
+
   defstruct([:repo, :registry_id, :partition, :locker_pid, :lock_id])
 
   def new(opts) do
@@ -15,7 +17,23 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
   The output is intended for `init_partition/2`
   """
   def init(t, opts) do
+    # TODO load registry on startup
     struct!(t, opts |> Enum.into(%{}))
+    |> assign_manager()
+  end
+
+  defp assign_manager(t) do
+    {:ok, manager_pid} =
+      RegistryManager.start_link(
+        # locker_pid: t.locker_pid,
+        repo: t.repo
+        # lock_namespace: @lock_namespace,
+        # lock_id: t.lock_id,
+        # supervisor_pid: self(),
+        # supervisor_id: t.supervisor_id
+      )
+
+    t |> Map.put(:manager_pid, manager_pid)
   end
 
   def register_key(backend, kind, _key_ets, key, {key, {pid, value}}) do
@@ -102,5 +120,29 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
 
   def unregister_key(_backend, fun) do
     fun.()
+  end
+
+  def terminate(t) do
+    # stop_child(t.locker_pid)
+    IO.inspect("TERMINATING")
+    stop_child(t.manager_pid)
+  end
+
+  defp stop_child(pid) do
+    monitor = Process.monitor(pid)
+    Process.exit(pid, :shutdown)
+
+    receive do
+      {:DOWN, ^monitor, :process, ^pid, _reason} ->
+        :ok
+    after
+      5000 ->
+        Process.exit(pid, :kill)
+
+        receive do
+          {:DOWN, ^monitor, :process, ^pid, _reason} ->
+            :ok
+        end
+    end
   end
 end
