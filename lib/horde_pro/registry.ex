@@ -362,7 +362,13 @@ defmodule HordePro.Registry do
           raise ArgumentError, "expected :name option to be present"
       end
 
-    horde_name = Keyword.get(options, :horde_name, name) |> to_string()
+    backend =
+      case Keyword.fetch(options, :backend) do
+        {:ok, backend} -> backend
+        :error -> raise ArgumentError, "expected :backend option to be present"
+      end
+
+    # horde_name = Keyword.get(options, :horde_name, name) |> to_string()
 
     meta = Keyword.get(options, :meta, [])
 
@@ -384,12 +390,12 @@ defmodule HordePro.Registry do
             "expected :listeners to be a list of named processes, got: #{inspect(listeners)}"
     end
 
-    repo =
-      Keyword.get(options, :repo, nil)
+    # repo =
+    #   Keyword.get(options, :repo, nil)
 
-    if is_nil(repo) do
-      raise ArgumentError, "expected :repo to be an Ecto repo, got #{inspect(repo)}"
-    end
+    # if is_nil(repo) do
+    #   raise ArgumentError, "expected :repo to be an Ecto repo, got #{inspect(repo)}"
+    # end
 
     compressed = Keyword.get(options, :compressed, false)
 
@@ -398,7 +404,7 @@ defmodule HordePro.Registry do
             "expected :compressed to be a boolean, got: #{inspect(compressed)}"
     end
 
-    backend = HordePro.Adapter.Postgres.RegistryBackend.new(registry_id: horde_name, repo: repo)
+    # backend = HordePro.Adapter.Postgres.RegistryBackend.new(registry_id: horde_name, repo: repo)
 
     # The @info format must be kept in sync with Registry.Partition optimization.
     entries = [
@@ -1100,7 +1106,7 @@ defmodule HordePro.Registry do
   @spec register(registry, key, value) :: {:ok, pid} | {:error, {:already_registered, pid}}
   def register(registry, key, value) when is_atom(registry) do
     self = self()
-    {kind, partitions, key_ets, pid_ets, listeners, backend} = info!(registry)
+    {kind, partitions, key_ets, pid_ets, _listeners, backend} = info!(registry)
     {key_partition, pid_partition} = partitions(kind, key, self, partitions)
     backend = backend || backend!(registry, key_partition)
     key_ets = key_ets || key_ets!(registry, key_partition)
@@ -1122,7 +1128,7 @@ defmodule HordePro.Registry do
            {key, {self, value}}
          ) do
       {:ok, events} ->
-        :ok = replay_events(registry, key_ets, events, listeners)
+        :ok = replay_events(registry, key_partition, events)
 
         {:ok, pid_server}
 
@@ -1137,21 +1143,34 @@ defmodule HordePro.Registry do
     end
   end
 
-  defp replay_events(registry, key_ets, events, listeners) do
-    #
-    # TODO
-    #
-    # Consider how to make sure that this always goes in the correct order.
-    # We might have to bring it into the Genserver RegistryManager
-    #
+  @doc false
+  def init_registry(kind, pid_ets, key_ets, entries) do
+    Enum.map(entries, fn
+      %{key: key, pid: pid, value: value} ->
+        # {kind, partitions, key_ets, pid_ets, listeners, _backend} = info!(registry)
+        # {key_partition, pid_partition} = partitions(kind, key, pid, partitions)
+        # # backend = backend || backend!(registry, key_partition)
+        # key_ets = key_ets || key_ets!(registry, key_partition)
+        # {pid_server, pid_ets} = pid_ets || pid_ets!(registry, pid_partition)
 
-    # event = %{
-    #   type: :insert_key,
-    #   kind: kind,
-    #   key: key,
-    #   pid: pid,
-    #   value: value
-    # }
+        counter = System.unique_integer()
+        true = :ets.insert(pid_ets, {pid, key, key_ets, counter})
+
+        register_key(kind, key_ets, key, {key, {pid, value}})
+
+        # for listener <- listeners do
+        #   Kernel.send(listener, {:register, registry, key, pid, value})
+        # end
+    end)
+  end
+
+  @doc false
+  def replay_events(registry, key_partition, events) do
+    {_kind, _partitions, key_ets, _pid_ets, listeners, _backend} = info!(registry)
+    # {key_partition, _pid_partition} = partitions(kind, key, self, partitions)
+    # backend = backend || backend!(registry, key_partition)
+    key_ets = key_ets || key_ets!(registry, key_partition)
+    # {pid_server, pid_ets} = pid_ets || pid_ets!(registry, pid_partition)
 
     Enum.each(events, fn
       %{type: :insert_key} = event ->
@@ -1718,7 +1737,15 @@ defmodule HordePro.Registry.Partition do
     Process.flag(:trap_exit, true)
     key_ets = init_key_ets(kind, key_partition, compressed)
     pid_ets = init_pid_ets(kind, pid_partition)
-    backend = HordePro.Adapter.Postgres.RegistryBackend.init(backend, partition: to_string(i))
+
+    backend =
+      HordePro.Adapter.Postgres.RegistryBackend.init(backend,
+        registry: registry,
+        partition: i,
+        key_ets: key_ets,
+        pid_ets: pid_ets,
+        kind: kind
+      )
 
     # If we have only one partition, we do an optimization which
     # is to write the table information alongside the registry info.

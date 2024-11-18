@@ -7,10 +7,10 @@ bench:
   MIX_ENV=dev mix run benchmarks/horde_pro_dynamic_supervisor.exs
 
 watch:
-  watchexec -r --clear=reset --project-origin=. --stop-timeout=0 MIX_ENV=test mix do compile --warnings-as-errors, test
+  watchexec -r --clear=reset --project-origin=. --stop-timeout=0 mix test --warnings-as-errors --all-warnings
 
 watch2:
-  watchexec -r --clear=reset --project-origin=. --stop-timeout=0 MIX_ENV=test mix do compile --warnings-as-errors, test test/horde_pro/registry_test.exs
+  watchexec -r --clear=reset --project-origin=. --stop-timeout=0 mix test --warnings-as-errors --all-warnings test/horde_pro/registry_test.exs
 
 migrate:
   MIX_ENV=test mix ecto.migrate -r HordeProTest.Repo

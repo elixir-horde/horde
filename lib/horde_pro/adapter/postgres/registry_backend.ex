@@ -3,33 +3,30 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
 
   alias HordePro.Adapter.Postgres.RegistryManager
 
-  defstruct([:repo, :registry_id, :partition, :locker_pid, :lock_id])
+  defstruct([
+    :repo,
+    :registry,
+    :registry_id,
+    :partition,
+    :locker_pid,
+    :lock_id,
+    :key_ets,
+    :pid_ets,
+    :kind
+  ])
 
   def new(opts) do
     struct!(__MODULE__, opts |> Enum.into(%{}))
   end
 
-  @doc """
-  This function is called once to set up what can be set up from the RegistrySupervisor init function.
-
-  The output is intended for `init_partition/2`
-  """
   def init(t, opts) do
-    # TODO load registry on startup
     struct!(t, opts |> Enum.into(%{}))
     |> assign_manager()
   end
 
   defp assign_manager(t) do
     {:ok, manager_pid} =
-      RegistryManager.start_link(
-        # locker_pid: t.locker_pid,
-        repo: t.repo
-        # lock_namespace: @lock_namespace,
-        # lock_id: t.lock_id,
-        # supervisor_pid: self(),
-        # supervisor_id: t.supervisor_id
-      )
+      RegistryManager.start_link(backend: t)
 
     t |> Map.put(:manager_pid, manager_pid)
   end
@@ -46,7 +43,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     }
 
     params = [
-      _registry_id = backend.registry_id <> backend.partition,
+      _registry_id = backend.registry_id <> to_string(backend.partition),
       _key = :erlang.term_to_binary(key),
       _pid = :erlang.term_to_binary(pid),
       _value = :erlang.term_to_binary(value),
@@ -125,7 +122,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     }
 
     params = [
-      _registry_id = backend.registry_id <> backend.partition,
+      _registry_id = backend.registry_id <> to_string(backend.partition),
       _key = :erlang.term_to_binary(key),
       _pid = :erlang.term_to_binary(self),
       _event = :erlang.term_to_binary(event),
@@ -198,6 +195,116 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
 
     {:ok, events}
   end
+
+  def get_registry(t) do
+    params = [
+      _registry_id = t.registry_id <> to_string(t.partition)
+    ]
+
+    import SqlFmt.Helpers
+
+    query = ~SQL"""
+    WITH events_index AS (
+      SELECT
+        COALESCE(MAX(event_counter), 0) AS max_counter
+      FROM
+        horde_pro_registry_events
+      WHERE
+        registry_id = $1
+    )
+    SELECT
+      (
+        SELECT
+          max_counter
+        FROM
+          events_index
+      ) AS max_counter,
+      KEY,
+      pid,
+      value
+    FROM
+      horde_pro_registry_processes
+    WHERE
+      registry_id = $1
+    """
+
+    rows =
+      case _result = Ecto.Adapters.SQL.query(t.repo, query, params) do
+        {:ok, %{rows: rows}} ->
+          rows
+      end
+
+    max_counter =
+      case rows do
+        [[max_counter | _] | _] -> max_counter
+        _ -> 0
+      end
+
+    registry =
+      rows
+      |> Enum.map(fn [_max_counter, key, pid, value] ->
+        %{
+          key: :erlang.binary_to_term(key),
+          pid: :erlang.binary_to_term(pid),
+          value: :erlang.binary_to_term(value)
+        }
+      end)
+
+    {registry, max_counter}
+  end
+
+  def init_registry(t, entries) do
+    HordePro.Registry.init_registry(t.kind, t.pid_ets, t.key_ets, entries)
+  end
+
+  # def replay_events(t, events) do
+  #   HordePro.Registry.replay_events(t.registry, t.partition, events)
+  # end
+
+  # def get_events(t, event_counter) do
+  #   params = [
+  #     _registry_id = t.registry_id <> to_string(t.partition),
+  #     _last_event_counter = event_counter
+  #   ]
+
+  #   import SqlFmt.Helpers
+
+  #   query = ~SQL"""
+  #   WITH events_index AS (
+  #     SELECT
+  #       COALESCE(MAX(event_counter), 0) AS max_counter
+  #     FROM
+  #       horde_pro_registry_events
+  #     WHERE
+  #       registry_id = $1
+  #   )
+  #   SELECT
+  #     event_body,
+  #     event_counter
+  #   FROM
+  #     horde_pro_registry_events
+  #   WHERE
+  #     registry_id = $1
+  #     AND event_counter > $2
+  #     AND event_counter < (
+  #       SELECT
+  #         max_counter
+  #       FROM
+  #         events_index
+  #     )
+  #   """
+
+  #   events =
+  #     case _result = Ecto.Adapters.SQL.query(t.repo, query, params) do
+  #       {:ok, %{rows: rows}} ->
+  #         rows
+  #     end
+  #     |> Enum.map(fn [event_body, _event_counter] ->
+  #       :erlang.binary_to_term(event_body)
+  #     end)
+
+  #   {:ok, events}
+  # end
 
   def terminate(t) do
     # stop_child(t.locker_pid)

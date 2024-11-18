@@ -4,7 +4,19 @@ defmodule HordePro.RegistryTest do
   alias HordePro.Registry, as: Reg
 
   def reg(name, extra_opts \\ []) do
-    initial_opts = [name: name, keys: :unique, repo: HordeProTest.Repo, partitions: 4]
+    registry_id = to_string(Keyword.get(extra_opts, :registry_id, name))
+
+    initial_opts = [
+      name: name,
+      keys: :unique,
+      backend:
+        HordePro.Adapter.Postgres.RegistryBackend.new(
+          repo: HordeProTest.Repo,
+          registry_id: registry_id
+        ),
+      partitions: 4
+    ]
+
     opts = Keyword.merge(initial_opts, extra_opts)
     Reg.start_link(opts)
   end
@@ -14,7 +26,16 @@ defmodule HordePro.RegistryTest do
     pid = self()
 
     {:ok, _reg} =
-      Reg.start_link(name: name, keys: :unique, partitions: 4, repo: HordeProTest.Repo)
+      Reg.start_link(
+        name: name,
+        keys: :unique,
+        partitions: 4,
+        backend:
+          HordePro.Adapter.Postgres.RegistryBackend.new(
+            repo: HordeProTest.Repo,
+            registry_id: to_string(name)
+          )
+      )
 
     key = :rand.uniform(10_000_000_000_000) |> to_string()
     assert {:ok, _owner_pid} = Reg.register(name, key, "here I am")
@@ -42,7 +63,6 @@ defmodule HordePro.RegistryTest do
 
     pid =
       spawn(fn ->
-        pid = self()
         assert {:ok, _owner_pid} = Reg.register(name, key, "here I am")
         send(test_pid, :continue)
 
@@ -56,5 +76,18 @@ defmodule HordePro.RegistryTest do
     send(pid, :continue)
     Process.sleep(100)
     assert [] = Reg.lookup(name, key)
+  end
+
+  test "registry catches up on startup" do
+    {:ok, _} = reg(:start1, registry_id: :start)
+
+    key = :rand.uniform(10_000_000_000_000) |> to_string()
+    {:ok, _pid} = Reg.register(:start1, key, "here I am")
+
+    {:ok, _} = reg(:start2, registry_id: :start)
+
+    pid = self()
+    assert [{^pid, "here I am"}] = Reg.lookup(:start1, key)
+    assert [{^pid, "here I am"}] = Reg.lookup(:start2, key)
   end
 end
