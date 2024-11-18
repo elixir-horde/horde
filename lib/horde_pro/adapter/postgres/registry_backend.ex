@@ -117,13 +117,90 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     {:ok, events}
   end
 
-  def unregister_key(_backend, fun) do
-    fun.()
+  def unregister_key(backend, key, self, fun) do
+    event = %{
+      type: :remove_key,
+      key: key,
+      pid: self
+    }
+
+    params = [
+      _registry_id = backend.registry_id <> backend.partition,
+      _key = :erlang.term_to_binary(key),
+      _pid = :erlang.term_to_binary(self),
+      _event = :erlang.term_to_binary(event),
+      _last_event_counter = 0
+    ]
+
+    import SqlFmt.Helpers
+
+    query = ~SQL"""
+    WITH events_index AS (
+      SELECT
+        COALESCE(MAX(event_counter), 0) AS max_counter
+      FROM
+        horde_pro_registry_events
+      WHERE
+        registry_id = $1
+    ),
+    x AS (
+      DELETE FROM
+        horde_pro_registry_processes
+      WHERE
+        registry_id = $1
+        AND KEY = $2
+        AND pid = $3
+    ),
+    new_events AS (
+      INSERT INTO
+        horde_pro_registry_events (registry_id, event_counter, event_body)
+      VALUES
+        (
+          $1,
+          (
+            SELECT
+              max_counter
+            FROM
+              events_index
+          ) + 1,
+          $4
+        )
+      RETURNING
+        *
+    )
+    SELECT
+      event_body,
+      event_counter
+    FROM
+      horde_pro_registry_events
+    WHERE
+      registry_id = $1
+      AND event_counter > $5
+    UNION
+    SELECT
+      event_body,
+      event_counter
+    FROM
+      new_events
+    ORDER BY
+      event_counter ASC
+    """
+
+    events =
+      case _result = Ecto.Adapters.SQL.query(backend.repo, query, params) do
+        {:ok, %{rows: rows}} ->
+          fun.()
+          rows
+      end
+      |> Enum.map(fn [event_body, _event_counter] ->
+        :erlang.binary_to_term(event_body)
+      end)
+
+    {:ok, events}
   end
 
   def terminate(t) do
     # stop_child(t.locker_pid)
-    IO.inspect("TERMINATING")
     stop_child(t.manager_pid)
   end
 

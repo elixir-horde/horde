@@ -948,7 +948,7 @@ defmodule HordePro.Registry do
     # to clean if we have no more entries.
     true = __unregister__(key_ets, {key, {self, :_}}, 1)
 
-    HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, fn ->
+    HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, self, fn ->
       true = __unregister__(pid_ets, {self, key, key_ets, :_}, 2)
 
       unlink_if_unregistered(pid_server, pid_ets, self)
@@ -1152,12 +1152,26 @@ defmodule HordePro.Registry do
     #   pid: pid,
     #   value: value
     # }
-    Enum.each(events, fn %{type: :insert_key} = event ->
-      register_key(event.kind, key_ets, event.key, {event.key, {event.pid, event.value}})
 
-      for listener <- listeners do
-        Kernel.send(listener, {:register, registry, event.key, event.pid, event.value})
-      end
+    Enum.each(events, fn
+      %{type: :insert_key} = event ->
+        register_key(event.kind, key_ets, event.key, {event.key, {event.pid, event.value}})
+
+        for listener <- listeners do
+          Kernel.send(listener, {:register, registry, event.key, event.pid, event.value})
+        end
+
+      %{type: :remove_key} = event ->
+        {kind, partitions, key_ets, pid_ets, listeners, _backend} = info!(registry)
+        {key_partition, pid_partition} = partitions(kind, event.key, event.pid, partitions)
+        key_ets = key_ets || key_ets!(registry, key_partition)
+        {_pid_server, pid_ets} = pid_ets || pid_ets!(registry, pid_partition)
+        true = __unregister__(key_ets, {event.key, {event.pid, :_}}, 1)
+        true = __unregister__(pid_ets, {event.pid, event.key, key_ets, :_}, 2)
+
+        for listener <- listeners do
+          Kernel.send(listener, {:unregister, registry, event.key, event.pid})
+        end
     end)
   end
 
@@ -1753,7 +1767,7 @@ defmodule HordePro.Registry.Partition do
     {:reply, :ok, state}
   end
 
-  def handle_call({:lock, key}, from, {ets, _backend, lock}) do
+  def handle_call({:lock, key}, from, {ets, backend, lock}) do
     lock =
       case lock do
         %{^key => queue} ->
@@ -1764,10 +1778,10 @@ defmodule HordePro.Registry.Partition do
           Map.put(lock, key, :queue.new())
       end
 
-    {:noreply, {ets, lock}}
+    {:noreply, {ets, backend, lock}}
   end
 
-  def handle_info({:EXIT, pid, _reason}, {ets, _backend, lock}) do
+  def handle_info({:EXIT, pid, _reason}, {ets, backend, lock}) do
     entries = :ets.take(ets, pid)
 
     for {_pid, key, key_ets, _counter} <- entries do
@@ -1782,14 +1796,15 @@ defmodule HordePro.Registry.Partition do
         end
 
       try do
-        # HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, pid)
-        Registry.__unregister__(key_ets, {key, {pid, :_}}, 1)
+        HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, pid, fn ->
+          Registry.__unregister__(key_ets, {key, {pid, :_}}, 1)
+        end)
       catch
         :error, :badarg -> :badarg
       end
     end
 
-    {:noreply, {ets, lock}}
+    {:noreply, {ets, backend, lock}}
   end
 
   def handle_info({{:unlock, key}, _ref, :process, _pid, _reason}, state) do
@@ -1805,7 +1820,7 @@ defmodule HordePro.Registry.Partition do
     HordePro.Adapter.Postgres.RegistryBackend.terminate(backend)
   end
 
-  defp unlock(key, {ets, lock}) do
+  defp unlock(key, {ets, backend, lock}) do
     %{^key => queue} = lock
 
     lock =
@@ -1814,7 +1829,7 @@ defmodule HordePro.Registry.Partition do
         {:not_empty, queue} -> Map.put(lock, key, queue)
       end
 
-    {:noreply, {ets, lock}}
+    {:noreply, {ets, backend, lock}}
   end
 
   defp dequeue(queue, key) do
