@@ -132,9 +132,9 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       _last_event_counter = 0
     ]
 
-    import SqlFmt.Helpers
+    # import SqlFmt.Helpers
 
-    query = ~SQL"""
+    query = """
     WITH events_index AS (
       SELECT
         COALESCE(MAX(event_counter), 0) AS max_counter
