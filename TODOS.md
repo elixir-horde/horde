@@ -1,3 +1,9 @@
+# NOW
+- clean-up of stale processes in registry (locking)
+- recording registry meta
+- pulling event replay into RegistryManager?
+
+# LATER
 - process handoff
   - how to put power into the hands of users? ex, maybe you only want to persist state for some processes and not others, depending for example on how expensive the state was to build up.
 
@@ -5,7 +11,9 @@
 
 - finish README
   - getting started guide
+
 - write mix task to copy migrations into repo migrations folder
+
 - optimize tables with indexes
 
 - add note about listeners firing on every node
@@ -15,9 +23,3 @@
 ## Considering
 - HordePro.Supervisor
   - I have seen this being requested a number of times. Sometimes people want to start a static list of processes and have them be uniformly distributed across their cluster. Perhaps we can meet this use case.
-
-UNREGISTER
-- unregister/2
-- unregister_match/4
-- handle_info({:EXIT, pid, _reason}) (process dies)
-
