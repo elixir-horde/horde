@@ -2,6 +2,12 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
   @moduledoc false
   use GenServer
 
+  import Ecto.Query, only: [from: 2]
+
+  require HordePro.Adapter.Postgres.Locker
+
+  alias HordePro.Adapter.Postgres.Locker
+
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts)
   end
@@ -11,8 +17,6 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
   @tick_interval 1000
   def init(opts) do
     schedule_tick()
-
-    # TODO load entire registry table, fetch latest event # too.
 
     t =
       Keyword.take(opts, [:backend])
@@ -36,8 +40,38 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
 
   def handle_info(:tick, t) do
     schedule_tick()
-    # acquire_locks(t)
-    # handle_disowned_children(t)
+    acquire_locks(t)
     {:noreply, t}
+  end
+
+  defp acquire_locks(t) do
+    IO.inspect("GETTING LOCKS")
+
+    registry_id = t.backend.registry_id <> to_string(t.backend.partition)
+
+    from(p in HordePro.Registry.Process,
+      distinct: p.lock_id,
+      select: p.lock_id,
+      where: p.registry_id == ^registry_id
+    )
+    |> t.backend.repo.all()
+    |> Enum.map(fn lock_id ->
+      Locker.with_lock t.backend.locker_pid, {t.backend.lock_namespace, lock_id} do
+        from(p in HordePro.Registry.Process,
+          where: p.lock_id == ^lock_id,
+          where: p.registry_id == ^registry_id
+        )
+        |> t.backend.repo.all()
+        |> Enum.map(fn process ->
+          HordePro.Adapter.Postgres.RegistryBackend.unregister_key(
+            t.backend,
+            :erlang.binary_to_term(process.key),
+            :erlang.binary_to_term(process.pid),
+            fn -> nil end
+          )
+          |> IO.inspect()
+        end)
+      end
+    end)
   end
 end

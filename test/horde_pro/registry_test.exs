@@ -90,4 +90,34 @@ defmodule HordePro.RegistryTest do
     assert [{^pid, "here I am"}] = Reg.lookup(:start1, key)
     assert [{^pid, "here I am"}] = Reg.lookup(:start2, key)
   end
+
+  test "registry clears out registered keys of dead registries" do
+    {:ok, reg1} = reg(:clear1, registry_id: :clear)
+
+    key = :rand.uniform(10_000_000_000_000) |> to_string()
+
+    test_pid = self()
+
+    pid =
+      spawn(fn ->
+        {:ok, _pid} = Reg.register(:clear1, key, "here I am")
+        send(test_pid, :continue)
+
+        receive do
+          :continue -> nil
+        end
+      end)
+
+    assert_receive :continue
+
+    {:ok, _} = reg(:clear2, registry_id: :clear)
+
+    assert [{^pid, "here I am"}] = Reg.lookup(:clear1, key)
+    assert [{^pid, "here I am"}] = Reg.lookup(:clear2, key)
+
+    Process.unlink(reg1)
+    Process.exit(reg1, :kill)
+    Process.sleep(5000)
+    assert [] = Reg.lookup(:clear2, key)
+  end
 end

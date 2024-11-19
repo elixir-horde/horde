@@ -2,6 +2,7 @@
 - clean-up of stale processes in registry (locking)
 - recording registry meta
 - pulling event replay into RegistryManager?
+- cleaning up registry event log
 
 # LATER
 - process handoff

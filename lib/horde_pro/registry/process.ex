@@ -10,6 +10,7 @@ defmodule HordePro.Registry.Process do
     field(:pid, :binary)
     field(:value, :binary)
     field(:is_unique, :boolean)
+    field(:lock_id, :integer)
   end
 
   def changeset(process, params) do

@@ -1,6 +1,9 @@
 defmodule HordePro.Adapter.Postgres.RegistryBackend do
   @moduledoc false
 
+  require HordePro.Adapter.Postgres.Locker
+
+  alias HordePro.Adapter.Postgres.Locker
   alias HordePro.Adapter.Postgres.RegistryManager
 
   defstruct([
@@ -10,6 +13,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     :partition,
     :locker_pid,
     :lock_id,
+    :lock_namespace,
     :key_ets,
     :pid_ets,
     :kind
@@ -21,7 +25,30 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
 
   def init(t, opts) do
     struct!(t, opts |> Enum.into(%{}))
+    |> assign_locker()
+    |> assign_new_lock_id()
     |> assign_manager()
+  end
+
+  defp assign_locker(t) do
+    {:ok, locker_pid} = Locker.start_link(repo: t.repo)
+    t |> Map.put(:locker_pid, locker_pid)
+  end
+
+  # TODO make these configurable
+  @lock_namespace 993_400
+
+  @max_attempts 5
+  defp assign_new_lock_id(t, attempts \\ @max_attempts)
+
+  defp assign_new_lock_id(t, attempts) when attempts > 0 do
+    lock_id = Locker.make_lock_32()
+    true = Locker.try_lock(t.locker_pid, {@lock_namespace, lock_id})
+    t |> Map.put(:lock_id, lock_id) |> Map.put(:lock_namespace, @lock_namespace)
+  end
+
+  defp assign_new_lock_id(_t, _lt_zero) do
+    raise "Could not acquire global lock"
   end
 
   defp assign_manager(t) do
@@ -49,7 +76,8 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       _value = :erlang.term_to_binary(value),
       _unique = kind == :unique,
       _event = :erlang.term_to_binary(event),
-      _last_event_counter = 0
+      _last_event_counter = 0,
+      _lock_id = backend.lock_id
     ]
 
     # import SqlFmt.Helpers
@@ -64,9 +92,9 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     ),
     x AS (
       INSERT INTO
-        horde_pro_registry_processes (registry_id, KEY, pid, value, is_unique)
+        horde_pro_registry_processes (registry_id, KEY, pid, value, is_unique, lock_id)
       VALUES
-        ($1, $2, $3, $4, $5)
+        ($1, $2, $3, $4, $5, $8)
     ),
     new_events AS (
       INSERT INTO
@@ -258,7 +286,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
   end
 
   def terminate(t) do
-    # stop_child(t.locker_pid)
+    stop_child(t.locker_pid)
     stop_child(t.manager_pid)
   end
 
