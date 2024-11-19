@@ -257,55 +257,6 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     HordePro.Registry.init_registry(t.kind, t.pid_ets, t.key_ets, entries)
   end
 
-  # def replay_events(t, events) do
-  #   HordePro.Registry.replay_events(t.registry, t.partition, events)
-  # end
-
-  # def get_events(t, event_counter) do
-  #   params = [
-  #     _registry_id = t.registry_id <> to_string(t.partition),
-  #     _last_event_counter = event_counter
-  #   ]
-
-  #   import SqlFmt.Helpers
-
-  #   query = ~SQL"""
-  #   WITH events_index AS (
-  #     SELECT
-  #       COALESCE(MAX(event_counter), 0) AS max_counter
-  #     FROM
-  #       horde_pro_registry_events
-  #     WHERE
-  #       registry_id = $1
-  #   )
-  #   SELECT
-  #     event_body,
-  #     event_counter
-  #   FROM
-  #     horde_pro_registry_events
-  #   WHERE
-  #     registry_id = $1
-  #     AND event_counter > $2
-  #     AND event_counter < (
-  #       SELECT
-  #         max_counter
-  #       FROM
-  #         events_index
-  #     )
-  #   """
-
-  #   events =
-  #     case _result = Ecto.Adapters.SQL.query(t.repo, query, params) do
-  #       {:ok, %{rows: rows}} ->
-  #         rows
-  #     end
-  #     |> Enum.map(fn [event_body, _event_counter] ->
-  #       :erlang.binary_to_term(event_body)
-  #     end)
-
-  #   {:ok, events}
-  # end
-
   def terminate(t) do
     # stop_child(t.locker_pid)
     stop_child(t.manager_pid)
