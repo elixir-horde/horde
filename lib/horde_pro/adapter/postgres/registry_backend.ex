@@ -17,7 +17,8 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     :lock_namespace,
     :key_ets,
     :pid_ets,
-    :kind
+    :kind,
+    :event_counter
   ])
 
   def new(opts) do
@@ -59,6 +60,12 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     t |> Map.put(:manager_pid, manager_pid)
   end
 
+  def serialize_events(backend, fun) do
+    RegistryManager.serialize_events(backend.manager_pid, fn event_counter ->
+      fun.(%{backend | event_counter: event_counter})
+    end)
+  end
+
   def register_key(backend, kind, _key_ets, key, {key, {pid, value}}) do
     # 1. write the key, and write the event
     # 2. also need to make sure we are up to date with events. So we write the event, and then also ask for all events between the last one we saw, and the one we just inserted.
@@ -77,13 +84,13 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       _value = :erlang.term_to_binary(value),
       _unique = kind == :unique,
       _event = :erlang.term_to_binary(event),
-      _last_event_counter = 0,
+      _last_event_counter = backend.event_counter,
       _lock_id = backend.lock_id
     ]
 
-    import SqlFmt.Helpers
+    # import SqlFmt.Helpers
 
-    query = ~SQL"""
+    query = """
     WITH events_index AS (
       SELECT
         COALESCE(MAX(event_counter), 0) AS max_counter
@@ -114,37 +121,50 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
         )
       RETURNING
         *
+    ),
+    all_events AS (
+      SELECT
+        event_body,
+        event_counter
+      FROM
+        horde_pro_registry_events
+      WHERE
+        registry_id = $1
+        AND event_counter > $7
+      UNION
+      SELECT
+        event_body,
+        event_counter
+      FROM
+        new_events
     )
     SELECT
       event_body,
       event_counter
     FROM
-      horde_pro_registry_events
-    WHERE
-      registry_id = $1
-      AND event_counter > $7
-    UNION
-    SELECT
-      event_body,
-      event_counter
-    FROM
-      new_events
+      all_events
     ORDER BY
-      event_counter ASC
+      event_counter DESC
     """
 
-    events =
-      case _result = Ecto.Adapters.SQL.query(backend.repo, query, params) do
-        {:ok, %{rows: rows}} -> rows
+    {:ok, %{rows: events}} = Ecto.Adapters.SQL.query(backend.repo, query, params)
+
+    new_event_counter =
+      case events do
+        [[_, counter] | _] -> counter
+        _ -> 0
       end
-      |> Enum.map(fn [event_body, _event_counter] ->
-        :erlang.binary_to_term(event_body)
+
+    events_decoded =
+      Enum.reduce(events, [], fn [event, _counter], collector ->
+        [:erlang.binary_to_term(event) | collector]
       end)
 
-    {:ok, events}
+    HordePro.Registry.replay_events(backend.registry, backend.partition, events_decoded)
+    new_event_counter
   end
 
-  def unregister_key(backend, key, self, fun) do
+  def unregister_key(backend, key, self) do
     event = %{
       type: :remove_key,
       key: key,
@@ -156,12 +176,12 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       _key = :erlang.term_to_binary(key),
       _pid = :erlang.term_to_binary(self),
       _event = :erlang.term_to_binary(event),
-      _last_event_counter = 0
+      _last_event_counter = backend.event_counter
     ]
 
-    import SqlFmt.Helpers
+    # import SqlFmt.Helpers
 
-    query = ~SQL"""
+    query = """
     WITH events_index AS (
       SELECT
         COALESCE(MAX(event_counter), 0) AS max_counter
@@ -194,36 +214,47 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
         )
       RETURNING
         *
+    ),
+    all_events AS (
+      SELECT
+        event_body,
+        event_counter
+      FROM
+        horde_pro_registry_events
+      WHERE
+        registry_id = $1
+        AND event_counter > $5
+      UNION
+      SELECT
+        event_body,
+        event_counter
+      FROM
+        new_events
     )
     SELECT
       event_body,
       event_counter
     FROM
-      horde_pro_registry_events
-    WHERE
-      registry_id = $1
-      AND event_counter > $5
-    UNION
-    SELECT
-      event_body,
-      event_counter
-    FROM
-      new_events
+      all_events
     ORDER BY
-      event_counter ASC
+      event_counter DESC
     """
 
-    events =
-      case Ecto.Adapters.SQL.query(backend.repo, query, params) do
-        {:ok, %{rows: rows}} ->
-          fun.()
-          rows
+    {:ok, %{rows: events}} = Ecto.Adapters.SQL.query(backend.repo, query, params)
+
+    new_event_counter =
+      case events do
+        [[_, counter] | _] -> counter
+        _ -> 0
       end
-      |> Enum.map(fn [event_body, _event_counter] ->
-        :erlang.binary_to_term(event_body)
+
+    events_decoded =
+      Enum.reduce(events, [], fn [event, _counter], collector ->
+        [:erlang.binary_to_term(event) | collector]
       end)
 
-    {:ok, events}
+    HordePro.Registry.replay_events(backend.registry, backend.partition, events_decoded)
+    new_event_counter
   end
 
   def get_events(t, event_counter) do

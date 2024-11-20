@@ -52,6 +52,7 @@ defmodule HordePro.RegistryTest do
     assert {:ok, _owner_pid} = Reg.register(name, key, "here I am")
     assert [{^pid, "here I am"}] = Reg.lookup(name, key)
     assert :ok = Reg.unregister(name, key)
+    # Process.sleep(1000)
     assert [] = Reg.lookup(name, key)
   end
 
@@ -74,7 +75,7 @@ defmodule HordePro.RegistryTest do
     assert_receive :continue
     assert [{^pid, "here I am"}] = Reg.lookup(name, key)
     send(pid, :continue)
-    Process.sleep(100)
+    Process.sleep(1000)
     assert [] = Reg.lookup(name, key)
   end
 

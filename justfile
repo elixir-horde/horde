@@ -10,7 +10,7 @@ watch:
   watchexec -r --clear=reset --project-origin=. --stop-timeout=0 mix test --warnings-as-errors --all-warnings
 
 watch2:
-  watchexec -r --clear=reset --project-origin=. --stop-timeout=0 mix test --warnings-as-errors --all-warnings test/horde_pro/registry_test.exs:120
+  watchexec -r --clear=reset --project-origin=. --stop-timeout=0 mix test --warnings-as-errors --all-warnings test/horde_pro/registry_test.exs
 
 watch3:
   watchexec -r --clear=reset --project-origin=. --stop-timeout=0 mix test --warnings-as-errors --all-warnings test/horde_pro/adapter/postgres/locker_test.exs

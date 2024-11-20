@@ -954,11 +954,13 @@ defmodule HordePro.Registry do
     # to clean if we have no more entries.
     true = __unregister__(key_ets, {key, {self, :_}}, 1)
 
-    HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, self, fn ->
-      true = __unregister__(pid_ets, {self, key, key_ets, :_}, 2)
-
-      unlink_if_unregistered(pid_server, pid_ets, self)
+    HordePro.Adapter.Postgres.RegistryBackend.serialize_events(backend, fn backend ->
+      HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, self)
     end)
+
+    true = __unregister__(pid_ets, {self, key, key_ets, :_}, 2)
+
+    unlink_if_unregistered(pid_server, pid_ets, self)
 
     for listener <- listeners do
       Kernel.send(listener, {:unregister, registry, key, self})
@@ -1120,16 +1122,17 @@ defmodule HordePro.Registry do
     counter = System.unique_integer()
     true = :ets.insert(pid_ets, {self, key, key_ets, counter})
 
-    case HordePro.Adapter.Postgres.RegistryBackend.register_key(
-           backend,
-           kind,
-           key_ets,
-           key,
-           {key, {self, value}}
-         ) do
-      {:ok, events} ->
-        :ok = replay_events(registry, key_partition, events)
-
+    HordePro.Adapter.Postgres.RegistryBackend.serialize_events(backend, fn backend ->
+      HordePro.Adapter.Postgres.RegistryBackend.register_key(
+        backend,
+        kind,
+        key_ets,
+        key,
+        {key, {self, value}}
+      )
+    end)
+    |> case do
+      true ->
         {:ok, pid_server}
 
       {:error, {:already_registered, ^self}} = error ->
@@ -1823,9 +1826,11 @@ defmodule HordePro.Registry.Partition do
         end
 
       try do
-        HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, pid, fn ->
-          Registry.__unregister__(key_ets, {key, {pid, :_}}, 1)
+        HordePro.Adapter.Postgres.RegistryBackend.serialize_events(backend, fn backend ->
+          HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, pid)
         end)
+
+        Registry.__unregister__(key_ets, {key, {pid, :_}}, 1)
       catch
         :error, :badarg -> :badarg
       end

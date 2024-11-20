@@ -12,6 +12,10 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
     GenServer.start_link(__MODULE__, opts)
   end
 
+  def serialize_events(manager, fun) do
+    GenServer.call(manager, {:serialize_events, fun})
+  end
+
   defstruct [:event_counter, :backend]
 
   @tick_interval 1000
@@ -45,6 +49,11 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
     Process.send_after(self(), :tick, @tick_interval)
   end
 
+  def handle_call({:serialize_events, fun}, _from, t) do
+    new_event_counter = fun.(t.event_counter)
+    {:reply, true, %{t | event_counter: new_event_counter}}
+  end
+
   def handle_info(:tick, t) do
     schedule_tick()
     acquire_locks(t)
@@ -73,12 +82,11 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
           where: p.registry_id == ^registry_id
         )
         |> t.backend.repo.all()
-        |> Enum.map(fn process ->
+        |> Enum.reduce(t.event_counter, fn process, event_counter ->
           HordePro.Adapter.Postgres.RegistryBackend.unregister_key(
-            t.backend,
+            %{t.backend | event_counter: event_counter},
             :erlang.binary_to_term(process.key),
-            :erlang.binary_to_term(process.pid),
-            fn -> nil end
+            :erlang.binary_to_term(process.pid)
           )
         end)
       end
