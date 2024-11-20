@@ -1,7 +1,6 @@
 # NOW
-- clean-up of stale processes in registry (locking)
+- BENCHMARKS vs OG Horde
 - recording registry meta
-- pulling event replay into RegistryManager?
 - cleaning up registry event log
 
 # LATER
