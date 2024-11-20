@@ -1,10 +1,10 @@
 defmodule HordeProTest.Repo.Migrations.NotifyTrigger do
   use Ecto.Migration
 
-  import SqlFmt.Helpers
+  # import SqlFmt.Helpers
 
   def change do
-    execute(~SQL"""
+    execute("""
     DO $create_trigger$
     BEGIN
     CREATE
