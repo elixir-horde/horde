@@ -25,6 +25,10 @@ defmodule HordePro.Adapter.Postgres.Locker do
     SimpleConnection.call(locker, {:release, lock_id}, @timeout)
   end
 
+  def listen(locker, channel) do
+    SimpleConnection.call(locker, {:listen, channel}, @timeout)
+  end
+
   @max_int Integer.pow(2, 32) - 1
 
   def make_lock_32() do
@@ -52,7 +56,7 @@ defmodule HordePro.Adapter.Postgres.Locker do
 
   @impl SimpleConnection
   def init(:no_arg) do
-    {:ok, %{from: nil, requested_lock_id: nil, releasing_lock_id: nil}}
+    {:ok, %{from: nil, requested_lock_id: nil, releasing_lock_id: nil, listeners: %{}}}
   end
 
   @impl SimpleConnection
@@ -62,6 +66,18 @@ defmodule HordePro.Adapter.Postgres.Locker do
 
   def handle_call({:release, lock_id}, from, state) do
     {:query, release_query(lock_id), %{state | from: from, releasing_lock_id: lock_id}}
+  end
+
+  def handle_call({:listen, channel}, {pid, _} = from, state) do
+    listeners = Map.update(state.listeners, channel, [pid], &[pid | &1])
+    {:query, ~s(LISTEN "#{channel}"), %{state | from: from, listeners: listeners}}
+  end
+
+  @impl SimpleConnection
+  def notify(channel, payload, state) do
+    for pid <- state.listeners[channel] do
+      send(pid, {:notice, channel, payload})
+    end
   end
 
   @impl SimpleConnection
@@ -93,9 +109,9 @@ defmodule HordePro.Adapter.Postgres.Locker do
     end
   end
 
-  @impl SimpleConnection
-  def notify(_, _, state) do
-    {:noreply, state}
+  def handle_result(_result, state) do
+    SimpleConnection.reply(state.from, true)
+    {:noreply, %{state | from: nil}}
   end
 
   # @lock_namespace :erlang.phash2("horde_pro")
@@ -104,19 +120,19 @@ defmodule HordePro.Adapter.Postgres.Locker do
   # https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS
   #
 
-  defp try_lock_query({l1, l2}) do
+  defp try_lock_query({l1, l2}) when is_integer(l1) and is_integer(l2) do
     "select pg_try_advisory_lock(#{l1}, #{l2})"
   end
 
-  defp try_lock_query(l1) do
+  defp try_lock_query(l1) when is_integer(l1) do
     "select pg_try_advisory_lock(#{l1})"
   end
 
-  defp release_query({l1, l2}) do
+  defp release_query({l1, l2}) when is_integer(l1) and is_integer(l2) do
     "select pg_advisory_unlock(#{l1}, #{l2})"
   end
 
-  defp release_query(l1) do
+  defp release_query(l1) when is_integer(l1) do
     "select pg_advisory_unlock(#{l1})"
   end
 end

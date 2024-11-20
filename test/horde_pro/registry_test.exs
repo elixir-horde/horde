@@ -117,7 +117,7 @@ defmodule HordePro.RegistryTest do
 
     Process.unlink(reg1)
     Process.exit(reg1, :kill)
-    Process.sleep(5000)
+    Process.sleep(2000)
     assert [] = Reg.lookup(:clear2, key)
   end
 end

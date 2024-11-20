@@ -2,6 +2,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
   @moduledoc false
 
   require HordePro.Adapter.Postgres.Locker
+  import Ecto.Query, only: [from: 2]
 
   alias HordePro.Adapter.Postgres.Locker
   alias HordePro.Adapter.Postgres.RegistryManager
@@ -80,8 +81,9 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       _lock_id = backend.lock_id
     ]
 
-    # import SqlFmt.Helpers
-    query = """
+    import SqlFmt.Helpers
+
+    query = ~SQL"""
     WITH events_index AS (
       SELECT
         COALESCE(MAX(event_counter), 0) AS max_counter
@@ -90,7 +92,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       WHERE
         registry_id = $1
     ),
-    x AS (
+    insert_processes AS (
       INSERT INTO
         horde_pro_registry_processes (registry_id, KEY, pid, value, is_unique, lock_id)
       VALUES
@@ -157,9 +159,9 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       _last_event_counter = 0
     ]
 
-    # import SqlFmt.Helpers
+    import SqlFmt.Helpers
 
-    query = """
+    query = ~SQL"""
     WITH events_index AS (
       SELECT
         COALESCE(MAX(event_counter), 0) AS max_counter
@@ -168,7 +170,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       WHERE
         registry_id = $1
     ),
-    x AS (
+    delete_processes AS (
       DELETE FROM
         horde_pro_registry_processes
       WHERE
@@ -212,7 +214,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     """
 
     events =
-      case _result = Ecto.Adapters.SQL.query(backend.repo, query, params) do
+      case Ecto.Adapters.SQL.query(backend.repo, query, params) do
         {:ok, %{rows: rows}} ->
           fun.()
           rows
@@ -222,6 +224,35 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       end)
 
     {:ok, events}
+  end
+
+  def get_events(t, event_counter) do
+    registry_id = t.registry_id <> to_string(t.partition)
+
+    new_events =
+      from(e in HordePro.Registry.Event,
+        where: e.registry_id == ^registry_id,
+        where: e.event_counter > ^event_counter,
+        order_by: {:desc, e.event_counter},
+        select: e.event_body
+      )
+      |> t.repo.all()
+
+    events =
+      Enum.reduce(new_events, [], fn event, events ->
+        [:erlang.binary_to_term(event) | events]
+      end)
+
+    HordePro.Registry.replay_events(t.registry, t.partition, events)
+
+    _new_event_counter =
+      case new_events do
+        [event | _] ->
+          :erlang.binary_to_term(event) |> Map.get(:event_counter)
+
+        _ ->
+          event_counter
+      end
   end
 
   def get_registry(t) do

@@ -22,7 +22,14 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
       Keyword.take(opts, [:backend])
       |> Enum.into(%{event_counter: 0})
 
-    {:ok, t |> load_registry()}
+    {:ok, t |> listen() |> load_registry()}
+  end
+
+  defp listen(t) do
+    true =
+      Locker.listen(t.backend.locker_pid, t.backend.registry_id <> to_string(t.backend.partition))
+
+    t
   end
 
   defp load_registry(t) do
@@ -44,9 +51,13 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
     {:noreply, t}
   end
 
-  defp acquire_locks(t) do
-    IO.inspect("GETTING LOCKS")
+  def handle_info({:notice, _channel, "UPDATE"}, t) do
+    new_counter = HordePro.Adapter.Postgres.RegistryBackend.get_events(t.backend, t.event_counter)
 
+    {:noreply, %{t | event_counter: new_counter}}
+  end
+
+  defp acquire_locks(t) do
     registry_id = t.backend.registry_id <> to_string(t.backend.partition)
 
     from(p in HordePro.Registry.Process,
@@ -69,7 +80,6 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
             :erlang.binary_to_term(process.pid),
             fn -> nil end
           )
-          |> IO.inspect()
         end)
       end
     end)

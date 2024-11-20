@@ -69,4 +69,27 @@ defmodule HordePro.Adapter.Postgres.LockerTest do
 
     assert true == Locker.try_lock(locker2, 5)
   end
+
+  test "listen / notify" do
+    locker1 = locker()
+    true = Locker.listen(locker1, "channel2")
+    Ecto.Adapters.SQL.query(Repo, ~s(NOTIFY "channel2", 'UPDATE1'), [])
+    Ecto.Adapters.SQL.query(Repo, ~s[SELECT pg_notify('channel2', 'UPDATE2')], [])
+    Ecto.Adapters.SQL.query(Repo, ~s[SELECT pg_notify($1, 'UPDATE3')], ["channel2"])
+    assert_receive {:notice, "channel2", "UPDATE1"}
+    assert_receive {:notice, "channel2", "UPDATE2"}
+    assert_receive {:notice, "channel2", "UPDATE3"}
+  end
+
+  test "listen/notify works when lock has been acquired" do
+    locker1 = locker()
+    true = Locker.try_lock(locker1, 1100)
+    true = Locker.listen(locker1, "channel3")
+    Ecto.Adapters.SQL.query(Repo, ~s(NOTIFY "channel3", 'UPDATE1'), [])
+    Ecto.Adapters.SQL.query(Repo, ~s[SELECT pg_notify('channel3', 'UPDATE2')], [])
+    Ecto.Adapters.SQL.query(Repo, ~s[SELECT pg_notify($1, 'UPDATE3')], ["channel3"])
+    assert_receive {:notice, "channel3", "UPDATE1"}
+    assert_receive {:notice, "channel3", "UPDATE2"}
+    assert_receive {:notice, "channel3", "UPDATE3"}
+  end
 end
