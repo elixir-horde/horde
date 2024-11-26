@@ -93,11 +93,20 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     query = """
     WITH events_index AS (
       SELECT
-        COALESCE(MAX(event_counter), 0) AS max_counter
-      FROM
-        horde_pro_registry_events
-      WHERE
-        registry_id = $1
+        coalesce(
+          (
+            SELECT
+              event_counter
+            FROM
+              horde_pro_registry_events
+            WHERE
+              registry_id = $1
+            ORDER BY
+              event_counter DESC
+            LIMIT
+              1
+          ), 0
+        ) AS max_counter
     ),
     insert_processes AS (
       INSERT INTO
@@ -107,17 +116,17 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     ),
     new_events AS (
       INSERT INTO
-        horde_pro_registry_events (registry_id, event_counter, event_body)
+        horde_pro_registry_events (registry_id, event_body, event_counter)
       VALUES
         (
           $1,
+          $6,
           (
             SELECT
               max_counter
             FROM
               events_index
-          ) + 1,
-          $6
+          ) + 1
         )
       RETURNING
         *
@@ -184,13 +193,21 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     query = """
     WITH events_index AS (
       SELECT
-        COALESCE(MAX(event_counter), 0) AS max_counter
-      FROM
-        horde_pro_registry_events
-      WHERE
-        registry_id = $1
-    ),
-    delete_processes AS (
+        coalesce(
+          (
+            SELECT
+              event_counter
+            FROM
+              horde_pro_registry_events
+            WHERE
+              registry_id = $1
+            ORDER BY
+              event_counter DESC
+            LIMIT
+              1
+          ), 0
+        ) AS max_counter
+    ), delete_processes AS (
       DELETE FROM
         horde_pro_registry_processes
       WHERE
@@ -200,17 +217,17 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     ),
     new_events AS (
       INSERT INTO
-        horde_pro_registry_events (registry_id, event_counter, event_body)
+        horde_pro_registry_events (registry_id, event_body, event_counter)
       VALUES
         (
           $1,
+          $4,
           (
             SELECT
               max_counter
             FROM
               events_index
-          ) + 1,
-          $4
+          ) + 1
         )
       RETURNING
         *
@@ -296,11 +313,20 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     query = """
     WITH events_index AS (
       SELECT
-        COALESCE(MAX(event_counter), 0) AS max_counter
-      FROM
-        horde_pro_registry_events
-      WHERE
-        registry_id = $1
+        coalesce(
+          (
+            SELECT
+              event_counter
+            FROM
+              horde_pro_registry_events
+            WHERE
+              registry_id = $1
+            ORDER BY
+              event_counter DESC
+            LIMIT
+              1
+          ), 0
+        ) AS max_counter
     )
     SELECT
       (

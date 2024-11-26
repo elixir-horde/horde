@@ -73,10 +73,10 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
     from(p in HordePro.Registry.Process,
       distinct: p.lock_id,
       select: p.lock_id,
-      where: p.registry_id == ^registry_id
+      where: p.registry_id == ^registry_id,
+      where: p.lock_id != ^t.backend.lock_id
     )
     |> t.backend.repo.all()
-    |> Enum.reject(fn lock_id -> lock_id == t.backend.lock_id end)
     |> Enum.map(fn lock_id ->
       Locker.with_lock t.backend.locker_pid, {t.backend.lock_namespace, lock_id} do
         from(p in HordePro.Registry.Process,
