@@ -23,6 +23,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     :repo,
     :registry,
     :registry_id,
+    :manager_pid,
     :partition,
     :locker_pid,
     :lock_id,
@@ -72,6 +73,11 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     t |> Map.put(:manager_pid, manager_pid)
   end
 
+  def with_event_counter(backend, fun) do
+    %{backend | event_counter: RegistryManager.get_event_counter(backend.manager_pid)}
+    |> fun.()
+  end
+
   def register_key(backend, kind, _key_ets, key, {key, {pid, value}}) do
     # 1. write the key, and write the event
     # 2. also need to make sure we are up to date with events. So we write the event, and then also ask for all events between the last one we saw, and the one we just inserted.
@@ -90,7 +96,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       _value = :erlang.term_to_binary(value),
       _unique = kind == :unique,
       _event = :erlang.term_to_binary(event),
-      _last_event_counter = RegistryManager.get_event_counter(backend.manager_pid),
+      _last_event_counter = backend.event_counter,
       _lock_id = backend.lock_id
     ]
 
@@ -199,7 +205,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       _key = :erlang.term_to_binary(key),
       _pid = :erlang.term_to_binary(self),
       _event = :erlang.term_to_binary(event),
-      _last_event_counter = RegistryManager.get_event_counter(backend.manager_pid)
+      _last_event_counter = backend.event_counter
     ]
 
     # import SqlFmt.Helpers

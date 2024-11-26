@@ -30,7 +30,11 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
       Keyword.take(opts, [:backend])
       |> Enum.into(%{event_counter: 0})
 
-    {:ok, t |> listen() |> load_registry()}
+    {:ok, t |> add_self() |> listen() |> load_registry()}
+  end
+
+  defp add_self(t) do
+    %{t | backend: %{t.backend | manager_pid: self()}}
   end
 
   defp listen(t) do

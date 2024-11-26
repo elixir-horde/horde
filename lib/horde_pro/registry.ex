@@ -1145,13 +1145,15 @@ defmodule HordePro.Registry do
   @doc false
   def horde_register_key(backend, kind, key_ets, key, {key, {self, value}}) do
     {events, event_counter} =
-      HordePro.Adapter.Postgres.RegistryBackend.register_key(
-        backend,
-        kind,
-        key_ets,
-        key,
-        {key, {self, value}}
-      )
+      HordePro.Adapter.Postgres.RegistryBackend.with_event_counter(backend, fn backend ->
+        HordePro.Adapter.Postgres.RegistryBackend.register_key(
+          backend,
+          kind,
+          key_ets,
+          key,
+          {key, {self, value}}
+        )
+      end)
 
     HordePro.Adapter.Postgres.RegistryBackend.replay_events(backend, events, event_counter)
   end
@@ -1159,7 +1161,9 @@ defmodule HordePro.Registry do
   @doc false
   def horde_unregister_key(backend, key, pid) do
     {events, event_counter} =
-      HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, pid)
+      HordePro.Adapter.Postgres.RegistryBackend.with_event_counter(backend, fn backend ->
+        HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, pid)
+      end)
 
     HordePro.Adapter.Postgres.RegistryBackend.replay_events(backend, events, event_counter)
   end
