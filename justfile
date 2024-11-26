@@ -3,8 +3,14 @@ default: watch
 docker:
   docker-compose up -d
 
-bench:
-  MIX_ENV=dev mix run benchmarks/horde_pro_dynamic_supervisor.exs
+bench_insert:
+  watchexec -r --clear=reset --project-origin=. --workdir=benchmarks --stop-timeout=0 mix run dynamic_supervisor_insert.exs
+
+bench_registry:
+  watchexec -r --clear=reset --project-origin=. --workdir=benchmarks --stop-timeout=0 mix run registry_replication.exs
+
+bench_dynamic_supervisor:
+  watchexec -r --clear=reset --project-origin=. --workdir=benchmarks --stop-timeout=0 mix run dynamic_supervisor_recovery.exs
 
 watch:
   watchexec -r --clear=reset --project-origin=. --stop-timeout=0 mix test --warnings-as-errors --all-warnings
