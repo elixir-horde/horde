@@ -8,3 +8,5 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: horde_pro
       POSTGRES_PORT: 6431
+    command: postgres -c shared_buffers=256MB -c max_connections=200
+
