@@ -15,13 +15,38 @@ end
 
 {:ok, _pid} = HordeProTest.Repo.start_link()
 
+defmodule HordeProTest.Telemetry do
+  def handle_event([:horde_pro_test, :repo, :query], measurements, metadata, config) do
+    IO.inspect(metadata, label: "METADATA")
+
+    measurements
+    |> Map.new(fn {label, meas} ->
+      {label, :erlang.convert_time_unit(meas, :native, :microsecond) / 1000}
+    end)
+    |> IO.inspect(label: "QUERY MEASUREMENTS")
+  end
+end
+
+tel_attach = fn ->
+  :ok =
+    :telemetry.attach(
+      "foo",
+      [:horde_pro_test, :repo, :query],
+      &HordeProTest.Telemetry.handle_event/4,
+      %{}
+    )
+end
+
+# tel_attach.()
+
 # Logger.configure(level: :critical)
 Logger.configure(level: :error)
 
-cases = %{"thousand" => 1..1000}
+# cases = %{"thousand" => 1..1000}
+cases = %{"hundred" => 1..100, "ten" => 1..10, "five hundred" => 1..500}
 # parallel = %{"one" => 1, "two" => 2, "four" => 4, "eight" => 8, "sixteen" => 16}
-parallel = %{"one" => 1, "eight" => 8, "thirtytwo" => 32}
-# parallel = %{"one" => 1, "eight" => 8}
+# parallel = %{"one" => 1, "eight" => 8, "thirtytwo" => 32}
+parallel = %{"eight" => 8}
 
 inputs =
   Enum.flat_map(cases, fn {k1, v1} ->

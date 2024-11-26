@@ -7,6 +7,18 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
   alias HordePro.Adapter.Postgres.Locker
   alias HordePro.Adapter.Postgres.RegistryManager
 
+  defmacro b(label, do: block) do
+    quote do
+      {time, result} =
+        :timer.tc(fn ->
+          unquote(block)
+        end)
+
+      IO.puts("Execution time (#{unquote(label)}): #{time / 1000} milliseconds")
+      result
+    end
+  end
+
   defstruct([
     :repo,
     :registry,
@@ -60,12 +72,6 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     t |> Map.put(:manager_pid, manager_pid)
   end
 
-  def serialize_events(backend, fun) do
-    RegistryManager.serialize_events(backend.manager_pid, fn event_counter ->
-      fun.(%{backend | event_counter: event_counter})
-    end)
-  end
-
   def register_key(backend, kind, _key_ets, key, {key, {pid, value}}) do
     # 1. write the key, and write the event
     # 2. also need to make sure we are up to date with events. So we write the event, and then also ask for all events between the last one we saw, and the one we just inserted.
@@ -84,13 +90,13 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       _value = :erlang.term_to_binary(value),
       _unique = kind == :unique,
       _event = :erlang.term_to_binary(event),
-      _last_event_counter = backend.event_counter,
+      _last_event_counter = RegistryManager.get_event_counter(backend.manager_pid),
       _lock_id = backend.lock_id
     ]
 
-    import SqlFmt.Helpers
+    # import SqlFmt.Helpers
 
-    query = ~SQL"""
+    query = """
     WITH insert_processes AS (
       INSERT INTO
         horde_pro_registry_processes (registry_id, KEY, pid, value, is_unique, lock_id)
@@ -149,7 +155,11 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       event_counter DESC
     """
 
-    {:ok, %{rows: events}} = Ecto.Adapters.SQL.query(backend.repo, query, params)
+    {:ok, %{rows: events}} =
+      b("register_key") do
+        backend.repo.query(query, params)
+      end
+
     return_events(events)
   end
 
@@ -189,12 +199,12 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       _key = :erlang.term_to_binary(key),
       _pid = :erlang.term_to_binary(self),
       _event = :erlang.term_to_binary(event),
-      _last_event_counter = backend.event_counter
+      _last_event_counter = RegistryManager.get_event_counter(backend.manager_pid)
     ]
 
-    import SqlFmt.Helpers
+    # import SqlFmt.Helpers
 
-    query = ~SQL"""
+    query = """
     WITH delete_processes AS (
       DELETE FROM
         horde_pro_registry_processes
@@ -255,7 +265,10 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       event_counter DESC
     """
 
-    {:ok, %{rows: events}} = Ecto.Adapters.SQL.query(backend.repo, query, params)
+    {:ok, %{rows: events}} =
+      b("unregister_key") do
+        backend.repo.query(query, params)
+      end
 
     return_events(events)
   end
@@ -282,9 +295,9 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       _registry_id = t.registry_id <> to_string(t.partition)
     ]
 
-    import SqlFmt.Helpers
+    # import SqlFmt.Helpers
 
-    query = ~SQL"""
+    query = """
     WITH stream AS (
       SELECT
         event_counter
@@ -310,7 +323,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     """
 
     rows =
-      case _result = Ecto.Adapters.SQL.query(t.repo, query, params) do
+      case _result = t.repo.query(query, params) do
         {:ok, %{rows: rows}} ->
           rows
       end
@@ -335,9 +348,9 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
   end
 
   def init_registry(t, entries) do
-    import SqlFmt.Helpers
+    # import SqlFmt.Helpers
 
-    query = ~SQL"""
+    query = """
     INSERT INTO
       horde_pro_registry_event_streams (registry_id, event_counter)
     VALUES
@@ -348,7 +361,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       _registry_id = t.registry_id <> to_string(t.partition)
     ]
 
-    {:ok, _result} = Ecto.Adapters.SQL.query(t.repo, query, params)
+    {:ok, _result} = t.repo.query(query, params)
     HordePro.Registry.init_registry(t.kind, t.pid_ets, t.key_ets, entries)
   end
 

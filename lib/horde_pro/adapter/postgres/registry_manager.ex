@@ -20,10 +20,6 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
     GenServer.call(manager, {:replay_events, events, new_event_counter})
   end
 
-  def serialize_events(manager, fun) do
-    GenServer.call(manager, {:serialize_events, fun})
-  end
-
   defstruct [:event_counter, :backend]
 
   @tick_interval 1000
@@ -58,7 +54,7 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
   end
 
   def handle_call(:get_event_counter, _from, t) do
-    {:reply, t.event_counter}
+    {:reply, t.event_counter, t}
   end
 
   def handle_call({:replay_events, events, new_event_counter}, _from, t) do
@@ -68,11 +64,6 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
       end)
 
     HordePro.Registry.do_replay_events(t.backend.registry, t.backend.partition, events)
-    {:reply, true, %{t | event_counter: new_event_counter}}
-  end
-
-  def handle_call({:serialize_events, fun}, _from, t) do
-    new_event_counter = fun.(t.event_counter)
     {:reply, true, %{t | event_counter: new_event_counter}}
   end
 
@@ -110,11 +101,16 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
         )
         |> t.backend.repo.all()
         |> Enum.reduce(t.event_counter, fn process, event_counter ->
-          HordePro.Adapter.Postgres.RegistryBackend.unregister_key(
-            %{t.backend | event_counter: event_counter},
-            :erlang.binary_to_term(process.key),
-            :erlang.binary_to_term(process.pid)
-          )
+          {events, new_counter} =
+            HordePro.Adapter.Postgres.RegistryBackend.unregister_key(
+              %{t.backend | event_counter: event_counter},
+              :erlang.binary_to_term(process.key),
+              :erlang.binary_to_term(process.pid)
+            )
+
+          events = Enum.map(events, fn {event, _count} -> event end)
+          HordePro.Registry.do_replay_events(t.backend.registry, t.backend.partition, events)
+          new_counter
         end)
       end
     end)
