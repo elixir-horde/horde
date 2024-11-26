@@ -265,12 +265,12 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
         where: e.registry_id == ^registry_id,
         where: e.event_counter > ^event_counter,
         order_by: {:desc, e.event_counter},
-        select: e.event_body
+        select: {e.event_body, e.event_counter}
       )
       |> t.repo.all()
 
     events =
-      Enum.reduce(new_events, [], fn event, events ->
+      Enum.reduce(new_events, [], fn {event, _event_counter}, events ->
         [:erlang.binary_to_term(event) | events]
       end)
 
@@ -278,8 +278,8 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
 
     _new_event_counter =
       case new_events do
-        [event | _] ->
-          :erlang.binary_to_term(event) |> Map.get(:event_counter)
+        [{_event, event_counter} | _] ->
+          event_counter
 
         _ ->
           event_counter

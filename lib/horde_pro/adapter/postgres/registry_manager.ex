@@ -61,7 +61,8 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
   end
 
   def handle_info({:notice, _channel, "UPDATE"}, t) do
-    new_counter = HordePro.Adapter.Postgres.RegistryBackend.get_events(t.backend, t.event_counter)
+    new_counter =
+      HordePro.Adapter.Postgres.RegistryBackend.get_events(t.backend, t.event_counter)
 
     {:noreply, %{t | event_counter: new_counter}}
   end
@@ -75,6 +76,7 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
       where: p.registry_id == ^registry_id
     )
     |> t.backend.repo.all()
+    |> Enum.reject(fn lock_id -> lock_id == t.backend.lock_id end)
     |> Enum.map(fn lock_id ->
       Locker.with_lock t.backend.locker_pid, {t.backend.lock_namespace, lock_id} do
         from(p in HordePro.Registry.Process,
