@@ -23,7 +23,8 @@ defmodule HordeBench.MixProject do
     [
       {:benchee, "> 0.0.0"},
       {:horde, "> 0.0.0"},
-      {:horde_pro, path: "~/Code/horde_pro"}
+      {:horde_pro, path: "~/Code/horde_pro"},
+      {:sql_fmt, "> 0.0.0"}
     ]
   end
 end
