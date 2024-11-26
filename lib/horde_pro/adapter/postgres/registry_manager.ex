@@ -12,6 +12,14 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
     GenServer.start_link(__MODULE__, opts)
   end
 
+  def get_event_counter(manager) do
+    GenServer.call(manager, :get_event_counter)
+  end
+
+  def replay_events(manager, events, new_event_counter) do
+    GenServer.call(manager, {:replay_events, events, new_event_counter})
+  end
+
   def serialize_events(manager, fun) do
     GenServer.call(manager, {:serialize_events, fun})
   end
@@ -49,6 +57,20 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
     Process.send_after(self(), :tick, @tick_interval)
   end
 
+  def handle_call(:get_event_counter, _from, t) do
+    {:reply, t.event_counter}
+  end
+
+  def handle_call({:replay_events, events, new_event_counter}, _from, t) do
+    events =
+      Enum.flat_map(events, fn {event, count} ->
+        if count > t.event_counter, do: [event], else: []
+      end)
+
+    HordePro.Registry.do_replay_events(t.backend.registry, t.backend.partition, events)
+    {:reply, true, %{t | event_counter: new_event_counter}}
+  end
+
   def handle_call({:serialize_events, fun}, _from, t) do
     new_event_counter = fun.(t.event_counter)
     {:reply, true, %{t | event_counter: new_event_counter}}
@@ -61,8 +83,11 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
   end
 
   def handle_info({:notice, _channel, "UPDATE"}, t) do
-    new_counter =
+    {events, new_counter} =
       HordePro.Adapter.Postgres.RegistryBackend.get_events(t.backend, t.event_counter)
+
+    events = Enum.map(events, fn {event, _count} -> event end)
+    HordePro.Registry.do_replay_events(t.backend.registry, t.backend.partition, events)
 
     {:noreply, %{t | event_counter: new_counter}}
   end

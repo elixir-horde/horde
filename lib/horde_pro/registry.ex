@@ -954,9 +954,7 @@ defmodule HordePro.Registry do
     # to clean if we have no more entries.
     true = __unregister__(key_ets, {key, {self, :_}}, 1)
 
-    HordePro.Adapter.Postgres.RegistryBackend.serialize_events(backend, fn backend ->
-      HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, self)
-    end)
+    horde_unregister_key(backend, key, self)
 
     true = __unregister__(pid_ets, {self, key, key_ets, :_}, 2)
 
@@ -1122,15 +1120,13 @@ defmodule HordePro.Registry do
     counter = System.unique_integer()
     true = :ets.insert(pid_ets, {self, key, key_ets, counter})
 
-    HordePro.Adapter.Postgres.RegistryBackend.serialize_events(backend, fn backend ->
-      HordePro.Adapter.Postgres.RegistryBackend.register_key(
-        backend,
-        kind,
-        key_ets,
-        key,
-        {key, {self, value}}
-      )
-    end)
+    horde_register_key(
+      backend,
+      kind,
+      key_ets,
+      key,
+      {key, {self, value}}
+    )
     |> case do
       true ->
         {:ok, pid_server}
@@ -1144,6 +1140,28 @@ defmodule HordePro.Registry do
         unlink_if_unregistered(pid_server, pid_ets, self)
         error
     end
+  end
+
+  @doc false
+  def horde_register_key(backend, kind, key_ets, key, {key, {self, value}}) do
+    {events, event_counter} =
+      HordePro.Adapter.Postgres.RegistryBackend.register_key(
+        backend,
+        kind,
+        key_ets,
+        key,
+        {key, {self, value}}
+      )
+
+    HordePro.Adapter.Postgres.RegistryBackend.replay_events(backend, events, event_counter)
+  end
+
+  @doc false
+  def horde_unregister_key(backend, key, pid) do
+    {events, event_counter} =
+      HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, pid)
+
+    HordePro.Adapter.Postgres.RegistryBackend.replay_events(backend, events, event_counter)
   end
 
   @doc false
@@ -1168,7 +1186,7 @@ defmodule HordePro.Registry do
   end
 
   @doc false
-  def replay_events(registry, key_partition, events) do
+  def do_replay_events(registry, key_partition, events) do
     {_kind, _partitions, key_ets, _pid_ets, listeners, _backend} = info!(registry)
     # {key_partition, _pid_partition} = partitions(kind, key, self, partitions)
     # backend = backend || backend!(registry, key_partition)
@@ -1826,11 +1844,9 @@ defmodule HordePro.Registry.Partition do
         end
 
       try do
-        HordePro.Adapter.Postgres.RegistryBackend.serialize_events(backend, fn backend ->
-          HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, pid)
-        end)
+        HordePro.Registry.horde_unregister_key(backend, key, pid)
 
-        Registry.__unregister__(key_ets, {key, {pid, :_}}, 1)
+        HordePro.Registry.__unregister__(key_ets, {key, {pid, :_}}, 1)
       catch
         :error, :badarg -> :badarg
       end
