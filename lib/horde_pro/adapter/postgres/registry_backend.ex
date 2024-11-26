@@ -88,31 +88,24 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       _lock_id = backend.lock_id
     ]
 
-    # import SqlFmt.Helpers
+    import SqlFmt.Helpers
 
-    query = """
-    WITH events_index AS (
-      SELECT
-        coalesce(
-          (
-            SELECT
-              event_counter
-            FROM
-              horde_pro_registry_events
-            WHERE
-              registry_id = $1
-            ORDER BY
-              event_counter DESC
-            LIMIT
-              1
-          ), 0
-        ) AS max_counter
-    ),
-    insert_processes AS (
+    query = ~SQL"""
+    WITH insert_processes AS (
       INSERT INTO
         horde_pro_registry_processes (registry_id, KEY, pid, value, is_unique, lock_id)
       VALUES
         ($1, $2, $3, $4, $5, $8)
+    ),
+    stream AS (
+      UPDATE
+        horde_pro_registry_event_streams
+      SET
+        event_counter = event_counter + 1
+      WHERE
+        registry_id = $1
+      RETURNING
+        *
     ),
     new_events AS (
       INSERT INTO
@@ -123,10 +116,10 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
           $6,
           (
             SELECT
-              max_counter
+              event_counter
             FROM
-              events_index
-          ) + 1
+              stream
+          )
         )
       RETURNING
         *
@@ -199,32 +192,26 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       _last_event_counter = backend.event_counter
     ]
 
-    # import SqlFmt.Helpers
+    import SqlFmt.Helpers
 
-    query = """
-    WITH events_index AS (
-      SELECT
-        coalesce(
-          (
-            SELECT
-              event_counter
-            FROM
-              horde_pro_registry_events
-            WHERE
-              registry_id = $1
-            ORDER BY
-              event_counter DESC
-            LIMIT
-              1
-          ), 0
-        ) AS max_counter
-    ), delete_processes AS (
+    query = ~SQL"""
+    WITH delete_processes AS (
       DELETE FROM
         horde_pro_registry_processes
       WHERE
         registry_id = $1
         AND KEY = $2
         AND pid = $3
+    ),
+    stream AS (
+      UPDATE
+        horde_pro_registry_event_streams
+      SET
+        event_counter = event_counter + 1
+      WHERE
+        registry_id = $1
+      RETURNING
+        *
     ),
     new_events AS (
       INSERT INTO
@@ -235,10 +222,10 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
           $4,
           (
             SELECT
-              max_counter
+              event_counter
             FROM
-              events_index
-          ) + 1
+              stream
+          )
         )
       RETURNING
         *
@@ -295,32 +282,23 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       _registry_id = t.registry_id <> to_string(t.partition)
     ]
 
-    # import SqlFmt.Helpers
+    import SqlFmt.Helpers
 
-    query = """
-    WITH events_index AS (
+    query = ~SQL"""
+    WITH stream AS (
       SELECT
-        coalesce(
-          (
-            SELECT
-              event_counter
-            FROM
-              horde_pro_registry_events
-            WHERE
-              registry_id = $1
-            ORDER BY
-              event_counter DESC
-            LIMIT
-              1
-          ), 0
-        ) AS max_counter
+        event_counter
+      FROM
+        horde_pro_registry_event_streams
+      WHERE
+        registry_id = $1
     )
     SELECT
       (
         SELECT
-          max_counter
+          coalesce(event_counter, 0)
         FROM
-          events_index
+          stream
       ) AS max_counter,
       KEY,
       pid,
@@ -357,6 +335,20 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
   end
 
   def init_registry(t, entries) do
+    import SqlFmt.Helpers
+
+    query = ~SQL"""
+    INSERT INTO
+      horde_pro_registry_event_streams (registry_id, event_counter)
+    VALUES
+      ($1, 0) ON conflict DO nothing
+    """
+
+    params = [
+      _registry_id = t.registry_id <> to_string(t.partition)
+    ]
+
+    {:ok, _result} = Ecto.Adapters.SQL.query(t.repo, query, params)
     HordePro.Registry.init_registry(t.kind, t.pid_ets, t.key_ets, entries)
   end
 
