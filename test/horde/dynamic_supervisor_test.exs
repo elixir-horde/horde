@@ -1,16 +1,16 @@
-defmodule HordePro.DynamicSupervisorTest do
+defmodule Horde.DynamicSupervisorTest do
   use ExUnit.Case
 
-  doctest HordePro
+  doctest Horde
 
-  alias HordePro.DynamicSupervisor, as: Sup
+  alias Horde.DynamicSupervisor, as: Sup
 
   defp child_spec(sup_name) do
     Sup.child_spec(
       strategy: :one_for_one,
       backend:
-        HordePro.Adapter.Postgres.DynamicSupervisorBackend.new(
-          repo: HordeProTest.Repo,
+        Horde.Adapter.Postgres.DynamicSupervisorBackend.new(
+          repo: HordeTest.Repo,
           supervisor_id: sup_name
         )
     )
@@ -21,8 +21,8 @@ defmodule HordePro.DynamicSupervisorTest do
       Sup.start_link(
         strategy: :one_for_one,
         backend:
-          HordePro.Adapter.Postgres.DynamicSupervisorBackend.new(
-            repo: HordeProTest.Repo,
+          Horde.Adapter.Postgres.DynamicSupervisorBackend.new(
+            repo: HordeTest.Repo,
             supervisor_id: name
           )
       )

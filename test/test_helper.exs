@@ -1,4 +1,4 @@
-{:ok, _pid} = HordeProTest.Repo.start_link()
+{:ok, _pid} = HordeTest.Repo.start_link()
 
 Logger.configure(level: :info)
 

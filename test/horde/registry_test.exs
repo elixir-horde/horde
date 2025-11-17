@@ -1,7 +1,7 @@
-defmodule HordePro.RegistryTest do
+defmodule Horde.RegistryTest do
   use ExUnit.Case
 
-  alias HordePro.Registry, as: Reg
+  alias Horde.Registry, as: Reg
 
   def reg(name, extra_opts \\ []) do
     registry_id = to_string(Keyword.get(extra_opts, :registry_id, name))
@@ -10,8 +10,8 @@ defmodule HordePro.RegistryTest do
       name: name,
       keys: :unique,
       backend:
-        HordePro.Adapter.Postgres.RegistryBackend.new(
-          repo: HordeProTest.Repo,
+        Horde.Adapter.Postgres.RegistryBackend.new(
+          repo: HordeTest.Repo,
           registry_id: registry_id
         ),
       partitions: 4
@@ -31,8 +31,8 @@ defmodule HordePro.RegistryTest do
         keys: :unique,
         partitions: 4,
         backend:
-          HordePro.Adapter.Postgres.RegistryBackend.new(
-            repo: HordeProTest.Repo,
+          Horde.Adapter.Postgres.RegistryBackend.new(
+            repo: HordeTest.Repo,
             registry_id: to_string(name)
           )
       )

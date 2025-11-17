@@ -1,9 +1,9 @@
-defmodule HordePro.MixProject do
+defmodule Horde.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :horde_pro,
+      app: :horde,
       version: "0.1.0",
       elixir: "~> 1.14",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -31,7 +31,7 @@ defmodule HordePro.MixProject do
   end
 
   defp docs do
-    [main: "HordePro"]
+    [main: "Horde"]
   end
 
   defp deps do

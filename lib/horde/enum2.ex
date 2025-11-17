@@ -1,4 +1,4 @@
-defmodule HordePro.Enum2 do
+defmodule Horde.Enum2 do
   def sum_by(enumerable, mapper)
 
   def sum_by(list, mapper) when is_list(list) and is_function(mapper, 1) do

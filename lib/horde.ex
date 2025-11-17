@@ -1,4 +1,4 @@
-defmodule HordePro do
+defmodule Horde do
   @external_resource "README.md"
   @moduledoc @external_resource
              |> File.read!()

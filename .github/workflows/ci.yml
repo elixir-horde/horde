@@ -7,7 +7,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      POSTGRES_URL: "ecto://postgres:postgres@localhost:5431/horde_pro"
+      POSTGRES_URL: "ecto://postgres:postgres@localhost:5431/horde"
       MIX_ENV: "test"
 
     strategy:
@@ -31,7 +31,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_USER: postgres
-          POSTGRES_DB: horde_pro
+          POSTGRES_DB: horde
           POSTGRES_PORT: 5431
 
     name: Tests
@@ -50,4 +50,4 @@ jobs:
       - run: mix format --check-formatted
         if: matrix.elixir-version == 1.17 && matrix.otp-version == 27
 
-      - run: mix do ecto.create --quiet -r HordeProTest.Repo, ecto.migrate -r HordeProTest.Repo, test
+      - run: mix do ecto.create --quiet -r HordeTest.Repo, ecto.migrate -r HordeTest.Repo, test

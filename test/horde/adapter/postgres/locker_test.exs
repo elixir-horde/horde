@@ -1,10 +1,10 @@
-defmodule HordePro.Adapter.Postgres.LockerTest do
+defmodule Horde.Adapter.Postgres.LockerTest do
   use ExUnit.Case, async: true
 
-  alias HordePro.Adapter.Postgres.Locker
-  alias HordeProTest.Repo
+  alias Horde.Adapter.Postgres.Locker
+  alias HordeTest.Repo
 
-  require HordePro.Adapter.Postgres.Locker
+  require Horde.Adapter.Postgres.Locker
 
   defp locker() do
     {:ok, locker} = Locker.start_link(repo: Repo)

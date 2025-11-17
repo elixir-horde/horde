@@ -1,8 +1,8 @@
-defmodule HordeProTest.Repo.Migrations.FixProcessesLockId do
+defmodule HordeTest.Repo.Migrations.FixProcessesLockId do
   use Ecto.Migration
 
   def change do
-    alter table("horde_pro_processes") do
+    alter table("horde_processes") do
       add(:modules, :bytea)
     end
   end

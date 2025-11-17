@@ -1,8 +1,8 @@
-defmodule HordeProTest.Repo.Migrations.AddProcessPid do
+defmodule HordeTest.Repo.Migrations.AddProcessPid do
   use Ecto.Migration
 
   def change do
-    alter table("horde_pro_processes") do
+    alter table("horde_processes") do
       add(:pid, :bytea)
     end
   end

@@ -1,10 +1,10 @@
-defmodule HordePro.Registry.Meta do
+defmodule Horde.Registry.Meta do
   @moduledoc false
   use Ecto.Schema
 
   import Ecto.Changeset
 
-  schema "horde_pro_registry_meta" do
+  schema "horde_registry_meta" do
     field(:registry_id, :string)
     field(:key, :binary)
     field(:value, :binary)

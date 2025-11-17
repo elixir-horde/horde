@@ -1,6 +1,6 @@
-defmodule HordeProTest.Repo do
+defmodule HordeTest.Repo do
   use Ecto.Repo,
-    otp_app: :horde_pro,
+    otp_app: :horde,
     adapter: Ecto.Adapters.Postgres
 
   def init(_context, config) do
@@ -13,10 +13,10 @@ defmodule HordeProTest.Repo do
   end
 end
 
-{:ok, _pid} = HordeProTest.Repo.start_link()
+{:ok, _pid} = HordeTest.Repo.start_link()
 
-defmodule HordeProTest.Telemetry do
-  def handle_event([:horde_pro_test, :repo, :query], measurements, metadata, config) do
+defmodule HordeTest.Telemetry do
+  def handle_event([:horde_test, :repo, :query], measurements, metadata, config) do
     IO.inspect(metadata, label: "METADATA")
 
     measurements
@@ -31,8 +31,8 @@ tel_attach = fn ->
   :ok =
     :telemetry.attach(
       "foo",
-      [:horde_pro_test, :repo, :query],
-      &HordeProTest.Telemetry.handle_event/4,
+      [:horde_test, :repo, :query],
+      &HordeTest.Telemetry.handle_event/4,
       %{}
     )
 end
@@ -77,10 +77,10 @@ Benchee.run(
 
       pids
     end,
-    "HordePro.Registry replication" => fn {pids, {cases, _parallel}} ->
+    "Horde.Registry replication" => fn {pids, {cases, _parallel}} ->
       Enum.each(cases, fn n ->
         Task.start_link(fn ->
-          HordePro.Registry.register(HordeProRegistry, "hello_#{n}", :value)
+          Horde.Registry.register(HordeRegistry, "hello_#{n}", :value)
           Process.sleep(20_000)
         end)
       end)
@@ -90,7 +90,7 @@ Benchee.run(
       while(fn ->
         Process.sleep(2)
 
-        last != HordePro.Registry.count(HordeProRegistry2)
+        last != Horde.Registry.count(HordeRegistry2)
       end)
 
       pids
@@ -103,7 +103,7 @@ Benchee.run(
     #   Task.async_stream(
     #     cases,
     #     fn n ->
-    #       HordePro.DynamicSupervisorChild.encode(
+    #       Horde.DynamicSupervisorChild.encode(
     #         %{supervisor_id: "123_123", lock_id: -2_329_838},
     #         self(),
     #         child_spec.start,
@@ -112,7 +112,7 @@ Benchee.run(
     #         :worker,
     #         []
     #       )
-    #       |> HordeProTest.Repo.insert()
+    #       |> HordeTest.Repo.insert()
     #     end,
     #     max_concurrency: parallel
     #   )
@@ -150,15 +150,15 @@ Benchee.run(
 
     #   pids
     # end,
-    # "HordePro.DynamicSupervisor.start_child/3" => fn {pids, {cases, parallel}} ->
+    # "Horde.DynamicSupervisor.start_child/3" => fn {pids, {cases, parallel}} ->
     #   bench_pid = self()
 
     #   Task.async_stream(
     #     cases,
     #     fn n ->
     #       {:ok, _child_pid} =
-    #         HordePro.DynamicSupervisor.start_child(
-    #           {:via, PartitionSupervisor, {HordeProSupervisor, n}},
+    #         Horde.DynamicSupervisor.start_child(
+    #           {:via, PartitionSupervisor, {HordeSupervisor, n}},
     #           {Task,
     #            fn ->
     #              send(bench_pid, {:msg, n})
@@ -202,24 +202,24 @@ Benchee.run(
     Horde.Cluster.set_members(HordeRegistry, [HordeRegistry, HordeRegistry2])
 
     {:ok, reg1} =
-      HordePro.Registry.start_link(
-        name: HordeProRegistry,
+      Horde.Registry.start_link(
+        name: HordeRegistry,
         keys: :unique,
         backend:
-          HordePro.Adapter.Postgres.RegistryBackend.new(
-            repo: HordeProTest.Repo,
+          Horde.Adapter.Postgres.RegistryBackend.new(
+            repo: HordeTest.Repo,
             registry_id: "registry_#{ref}"
           ),
         partitions: parallel
       )
 
     {:ok, reg1_2} =
-      HordePro.Registry.start_link(
-        name: HordeProRegistry2,
+      Horde.Registry.start_link(
+        name: HordeRegistry2,
         keys: :unique,
         backend:
-          HordePro.Adapter.Postgres.RegistryBackend.new(
-            repo: HordeProTest.Repo,
+          Horde.Adapter.Postgres.RegistryBackend.new(
+            repo: HordeTest.Repo,
             registry_id: "registry_#{ref}"
           ),
         partitions: parallel

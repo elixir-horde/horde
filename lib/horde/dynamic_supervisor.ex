@@ -1,4 +1,4 @@
-defmodule HordePro.DynamicSupervisor do
+defmodule Horde.DynamicSupervisor do
   @moduledoc ~S"""
   A supervisor optimized to only start children dynamically.
 
@@ -266,7 +266,7 @@ defmodule HordePro.DynamicSupervisor do
 
     %{
       id: id,
-      start: {HordePro.DynamicSupervisor, :start_link, [options]},
+      start: {Horde.DynamicSupervisor, :start_link, [options]},
       type: :supervisor
     }
   end
@@ -274,7 +274,7 @@ defmodule HordePro.DynamicSupervisor do
   @doc false
   defmacro __using__(opts) do
     quote location: :keep, bind_quoted: [opts: opts] do
-      @behaviour HordePro.DynamicSupervisor
+      @behaviour Horde.DynamicSupervisor
       if not Module.has_attribute?(__MODULE__, :doc) do
         @doc """
         Returns a specification to start this module under a supervisor.
@@ -643,7 +643,7 @@ defmodule HordePro.DynamicSupervisor do
             is_tuple(name) -> name
           end
 
-        state = %HordePro.DynamicSupervisor{mod: mod, args: init_arg, name: name}
+        state = %Horde.DynamicSupervisor{mod: mod, args: init_arg, name: name}
 
         case init(state, flags) do
           {:ok, state} -> {:ok, state}
@@ -674,7 +674,7 @@ defmodule HordePro.DynamicSupervisor do
          :ok <- validate_extra_arguments(extra_arguments),
          :ok <- validate_auto_shutdown(auto_shutdown),
          :ok <- validate_backend(backend) do
-      new_backend = HordePro.Adapter.Postgres.DynamicSupervisorBackend.init(backend)
+      new_backend = Horde.Adapter.Postgres.DynamicSupervisorBackend.init(backend)
 
       {:ok,
        %{
@@ -839,7 +839,7 @@ defmodule HordePro.DynamicSupervisor do
     mfa = mfa_for_restart(mfa, restart)
 
     :ok =
-      HordePro.Adapter.Postgres.DynamicSupervisorBackend.save_child(
+      Horde.Adapter.Postgres.DynamicSupervisorBackend.save_child(
         state.backend,
         pid,
         mfa,
@@ -898,7 +898,7 @@ defmodule HordePro.DynamicSupervisor do
   def handle_info(msg, state) do
     :logger.error(
       %{
-        label: {HordePro.DynamicSupervisor, :unexpected_msg},
+        label: {Horde.DynamicSupervisor, :unexpected_msg},
         report: %{
           msg: msg
         }
@@ -932,7 +932,7 @@ defmodule HordePro.DynamicSupervisor do
 
   @impl true
   def terminate(_, %{children: children} = state) do
-    :ok = HordePro.Adapter.Postgres.DynamicSupervisorBackend.terminate(state.backend)
+    :ok = Horde.Adapter.Postgres.DynamicSupervisorBackend.terminate(state.backend)
     :ok = terminate_children(children, state)
   end
 
@@ -1090,7 +1090,7 @@ defmodule HordePro.DynamicSupervisor do
   end
 
   defp delete_child(pid, %{children: children} = state) do
-    :ok = HordePro.Adapter.Postgres.DynamicSupervisorBackend.delete_child(state.backend, pid)
+    :ok = Horde.Adapter.Postgres.DynamicSupervisorBackend.delete_child(state.backend, pid)
     %{state | children: Map.delete(children, pid)}
   end
 
@@ -1197,6 +1197,6 @@ defmodule HordePro.DynamicSupervisor do
         label: {__MODULE__, :unexpected_msg},
         report: %{msg: msg}
       }) do
-    {~c"HordePro.DynamicSupervisor received unexpected message: ~p~n", [msg]}
+    {~c"Horde.DynamicSupervisor received unexpected message: ~p~n", [msg]}
   end
 end

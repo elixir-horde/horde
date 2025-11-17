@@ -1,4 +1,4 @@
-defmodule HordePro.Adapter.Postgres.Locker do
+defmodule Horde.Adapter.Postgres.Locker do
   @moduledoc false
 
   alias Postgrex.SimpleConnection
@@ -41,13 +41,13 @@ defmodule HordePro.Adapter.Postgres.Locker do
   defmacro with_lock(locker, lock_id, do: block) do
     quote do
       try do
-        if HordePro.Adapter.Postgres.Locker.try_lock(unquote(locker), unquote(lock_id)) do
+        if Horde.Adapter.Postgres.Locker.try_lock(unquote(locker), unquote(lock_id)) do
           unquote(block)
         else
           false
         end
       after
-        HordePro.Adapter.Postgres.Locker.release(unquote(locker), unquote(lock_id))
+        Horde.Adapter.Postgres.Locker.release(unquote(locker), unquote(lock_id))
       end
     end
   end
@@ -114,7 +114,7 @@ defmodule HordePro.Adapter.Postgres.Locker do
     {:noreply, %{state | from: nil}}
   end
 
-  # @lock_namespace :erlang.phash2("horde_pro")
+  # @lock_namespace :erlang.phash2("horde")
 
   #
   # https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS

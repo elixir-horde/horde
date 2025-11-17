@@ -1,10 +1,10 @@
-defmodule HordePro.Registry.Event do
+defmodule Horde.Registry.Event do
   @moduledoc false
   use Ecto.Schema
 
   import Ecto.Changeset
 
-  schema "horde_pro_registry_events" do
+  schema "horde_registry_events" do
     field(:registry_id, :string)
     field(:event_counter, :integer)
     field(:event_body, :binary)

@@ -16,16 +16,16 @@ watch:
   watchexec -r --clear=reset -w . --project-origin=. --stop-timeout=0 mix test --warnings-as-errors --all-warnings
 
 watch2:
-  watchexec -r --clear=reset -w . --project-origin=. --stop-timeout=0 mix test --warnings-as-errors --all-warnings test/horde_pro/registry_test.exs
+  watchexec -r --clear=reset -w . --project-origin=. --stop-timeout=0 mix test --warnings-as-errors --all-warnings test/horde/registry_test.exs
 
 watch3:
-  watchexec -r --clear=reset -w . --project-origin=. --stop-timeout=0 mix test --warnings-as-errors --all-warnings test/horde_pro/adapter/postgres/locker_test.exs
+  watchexec -r --clear=reset -w . --project-origin=. --stop-timeout=0 mix test --warnings-as-errors --all-warnings test/horde/adapter/postgres/locker_test.exs
 
 migrate:
-  MIX_ENV=test mix ecto.migrate -r HordeProTest.Repo
+  MIX_ENV=test mix ecto.migrate -r HordeTest.Repo
 
 db_reset:
-  MIX_ENV=test mix do ecto.drop -r HordeProTest.Repo, ecto.create -r HordeProTest.Repo, ecto.migrate -r HordeProTest.Repo
+  MIX_ENV=test mix do ecto.drop -r HordeTest.Repo, ecto.create -r HordeTest.Repo, ecto.migrate -r HordeTest.Repo
 
 gen_migration MIG:
-  MIX_ENV=test mix ecto.gen.migration -r HordeProTest.Repo {{MIG}}
+  MIX_ENV=test mix ecto.gen.migration -r HordeTest.Repo {{MIG}}

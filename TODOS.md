@@ -21,5 +21,5 @@
 - use LISTEN / NOTIFY instead of polling in *Manager
 
 ## Considering
-- HordePro.Supervisor
+- Horde.Supervisor
   - I have seen this being requested a number of times. Sometimes people want to start a static list of processes and have them be uniformly distributed across their cluster. Perhaps we can meet this use case.

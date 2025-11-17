@@ -1,9 +1,9 @@
-defmodule HordePro.Adapter.Postgres.DynamicSupervisorManager do
+defmodule Horde.Adapter.Postgres.DynamicSupervisorManager do
   @moduledoc false
   use GenServer
 
   import Ecto.Query, only: [from: 2]
-  alias HordePro.Adapter.Postgres.Locker
+  alias Horde.Adapter.Postgres.Locker
   require Locker
 
   # This module is responsible for performing periodic clean-up.
@@ -46,7 +46,7 @@ defmodule HordePro.Adapter.Postgres.DynamicSupervisorManager do
   end
 
   defp acquire_locks(t) do
-    from(c in HordePro.DynamicSupervisorChild,
+    from(c in Horde.DynamicSupervisorChild,
       distinct: c.lock_id,
       select: c.lock_id,
       where: not is_nil(c.lock_id),
@@ -55,7 +55,7 @@ defmodule HordePro.Adapter.Postgres.DynamicSupervisorManager do
     |> t.repo.all()
     |> Enum.map(fn lock_id ->
       Locker.with_lock t.locker_pid, {t.lock_namespace, lock_id} do
-        from(c in HordePro.DynamicSupervisorChild,
+        from(c in Horde.DynamicSupervisorChild,
           where: c.lock_id == ^lock_id,
           where: c.supervisor_id == ^t.supervisor_id
         )
@@ -72,13 +72,13 @@ defmodule HordePro.Adapter.Postgres.DynamicSupervisorManager do
     #
     # If we crash, then the lock will be reset by the manager on another node.
     #
-    from(c in HordePro.DynamicSupervisorChild,
+    from(c in Horde.DynamicSupervisorChild,
       where: is_nil(c.lock_id),
       where: c.supervisor_id == ^t.supervisor_id
     )
     |> t.repo.all()
     |> Enum.map(fn child ->
-      from(c in HordePro.DynamicSupervisorChild,
+      from(c in Horde.DynamicSupervisorChild,
         where: c.id == ^child.id,
         where: is_nil(c.lock_id),
         where: c.supervisor_id == ^t.supervisor_id
@@ -93,7 +93,7 @@ defmodule HordePro.Adapter.Postgres.DynamicSupervisorManager do
       end
     end)
     |> Enum.map(fn child ->
-      {pid, child} = HordePro.DynamicSupervisorChild.decode(child)
+      {pid, child} = Horde.DynamicSupervisorChild.decode(child)
 
       GenServer.call(t.supervisor_pid, {:resume_child, {pid, child}}, :infinity)
     end)

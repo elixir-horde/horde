@@ -1,12 +1,12 @@
-defmodule HordePro.Adapter.Postgres.RegistryManager do
+defmodule Horde.Adapter.Postgres.RegistryManager do
   @moduledoc false
   use GenServer
 
   import Ecto.Query, only: [from: 2]
 
-  require HordePro.Adapter.Postgres.Locker
+  require Horde.Adapter.Postgres.Locker
 
-  alias HordePro.Adapter.Postgres.Locker
+  alias Horde.Adapter.Postgres.Locker
 
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts)
@@ -46,9 +46,9 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
 
   defp load_registry(t) do
     {registry, event_counter} =
-      HordePro.Adapter.Postgres.RegistryBackend.get_registry(t.backend)
+      Horde.Adapter.Postgres.RegistryBackend.get_registry(t.backend)
 
-    HordePro.Adapter.Postgres.RegistryBackend.init_registry(t.backend, registry)
+    Horde.Adapter.Postgres.RegistryBackend.init_registry(t.backend, registry)
 
     Map.put(t, :event_counter, event_counter)
   end
@@ -67,7 +67,7 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
         if count > t.event_counter, do: [event], else: []
       end)
 
-    HordePro.Registry.do_replay_events(t.backend.registry, t.backend.partition, events)
+    Horde.Registry.do_replay_events(t.backend.registry, t.backend.partition, events)
     {:reply, true, %{t | event_counter: new_event_counter}}
   end
 
@@ -79,10 +79,10 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
 
   def handle_info({:notice, _channel, "UPDATE"}, t) do
     {events, new_counter} =
-      HordePro.Adapter.Postgres.RegistryBackend.get_events(t.backend, t.event_counter)
+      Horde.Adapter.Postgres.RegistryBackend.get_events(t.backend, t.event_counter)
 
     events = Enum.map(events, fn {event, _count} -> event end)
-    HordePro.Registry.do_replay_events(t.backend.registry, t.backend.partition, events)
+    Horde.Registry.do_replay_events(t.backend.registry, t.backend.partition, events)
 
     {:noreply, %{t | event_counter: new_counter}}
   end
@@ -90,7 +90,7 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
   defp acquire_locks(t) do
     registry_id = t.backend.registry_id <> to_string(t.backend.partition)
 
-    from(p in HordePro.Registry.Process,
+    from(p in Horde.Registry.Process,
       distinct: p.lock_id,
       select: p.lock_id,
       where: p.registry_id == ^registry_id,
@@ -99,21 +99,21 @@ defmodule HordePro.Adapter.Postgres.RegistryManager do
     |> t.backend.repo.all()
     |> Enum.map(fn lock_id ->
       Locker.with_lock t.backend.locker_pid, {t.backend.lock_namespace, lock_id} do
-        from(p in HordePro.Registry.Process,
+        from(p in Horde.Registry.Process,
           where: p.lock_id == ^lock_id,
           where: p.registry_id == ^registry_id
         )
         |> t.backend.repo.all()
         |> Enum.reduce(t.event_counter, fn process, event_counter ->
           {events, new_counter} =
-            HordePro.Adapter.Postgres.RegistryBackend.unregister_key(
+            Horde.Adapter.Postgres.RegistryBackend.unregister_key(
               %{t.backend | event_counter: event_counter},
               :erlang.binary_to_term(process.key),
               :erlang.binary_to_term(process.pid)
             )
 
           events = Enum.map(events, fn {event, _count} -> event end)
-          HordePro.Registry.do_replay_events(t.backend.registry, t.backend.partition, events)
+          Horde.Registry.do_replay_events(t.backend.registry, t.backend.partition, events)
           new_counter
         end)
       end

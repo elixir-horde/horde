@@ -1,4 +1,4 @@
-defmodule HordeProTest.Repo.Migrations.NotifyTrigger do
+defmodule HordeTest.Repo.Migrations.NotifyTrigger do
   use Ecto.Migration
 
   # import SqlFmt.Helpers
@@ -22,7 +22,7 @@ defmodule HordeProTest.Repo.Migrations.NotifyTrigger do
     CREATE trigger event_notification
     AFTER
     INSERT
-      ON horde_pro_registry_events FOR EACH ROW EXECUTE PROCEDURE notify_events();
+      ON horde_registry_events FOR EACH ROW EXECUTE PROCEDURE notify_events();
     END;
     $create_trigger$ language plpgsql;
     """)

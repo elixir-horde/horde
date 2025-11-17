@@ -1,11 +1,11 @@
-defmodule HordePro.DynamicSupervisorChild do
+defmodule Horde.DynamicSupervisorChild do
   @moduledoc false
 
   use Ecto.Schema
 
   import Ecto.Changeset
 
-  schema "horde_pro_dynamic_supervisor_children" do
+  schema "horde_dynamic_supervisor_children" do
     field(:supervisor_id, :string)
     field(:mfargs, :binary)
     field(:pid, :binary)
@@ -68,7 +68,7 @@ defmodule HordePro.DynamicSupervisorChild do
         lock_id: backend.lock_id
       }
 
-    HordePro.DynamicSupervisorChild.changeset(%HordePro.DynamicSupervisorChild{}, params)
+    Horde.DynamicSupervisorChild.changeset(%Horde.DynamicSupervisorChild{}, params)
   end
 
   def decode(child) do

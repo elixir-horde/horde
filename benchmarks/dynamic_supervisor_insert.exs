@@ -1,6 +1,6 @@
-defmodule HordeProTest.Repo do
+defmodule HordeTest.Repo do
   use Ecto.Repo,
-    otp_app: :horde_pro,
+    otp_app: :horde,
     adapter: Ecto.Adapters.Postgres
 
   def init(_context, config) do
@@ -13,7 +13,7 @@ defmodule HordeProTest.Repo do
   end
 end
 
-{:ok, _pid} = HordeProTest.Repo.start_link()
+{:ok, _pid} = HordeTest.Repo.start_link()
 
 Logger.configure(level: :critical)
 
@@ -38,7 +38,7 @@ Benchee.run(
       Task.async_stream(
         cases,
         fn n ->
-          HordePro.DynamicSupervisorChild.encode(
+          Horde.DynamicSupervisorChild.encode(
             %{supervisor_id: "123_123", lock_id: -2_329_838},
             self(),
             child_spec.start,
@@ -47,7 +47,7 @@ Benchee.run(
             :worker,
             []
           )
-          |> HordeProTest.Repo.insert()
+          |> HordeTest.Repo.insert()
         end,
         max_concurrency: parallel
       )
@@ -85,15 +85,15 @@ Benchee.run(
 
       pids
     end,
-    "HordePro.DynamicSupervisor.start_child/3" => fn {pids, {cases, parallel}} ->
+    "Horde.DynamicSupervisor.start_child/3" => fn {pids, {cases, parallel}} ->
       bench_pid = self()
 
       Task.async_stream(
         cases,
         fn n ->
           {:ok, _child_pid} =
-            HordePro.DynamicSupervisor.start_child(
-              {:via, PartitionSupervisor, {HordeProSupervisor, n}},
+            Horde.DynamicSupervisor.start_child(
+              {:via, PartitionSupervisor, {HordeSupervisor, n}},
               {Task,
                fn ->
                  send(bench_pid, {:msg, n})
@@ -122,14 +122,14 @@ Benchee.run(
 
     {:ok, sup1} =
       PartitionSupervisor.start_link(
-        name: HordeProSupervisor,
+        name: HordeSupervisor,
         partitions: parallel,
         child_spec:
-          HordePro.DynamicSupervisor.child_spec(
+          Horde.DynamicSupervisor.child_spec(
             strategy: :one_for_one,
             backend:
-              HordePro.Adapter.Postgres.DynamicSupervisorBackend.new(
-                repo: HordeProTest.Repo,
+              Horde.Adapter.Postgres.DynamicSupervisorBackend.new(
+                repo: HordeTest.Repo,
                 supervisor_id: "benchmark_#{ref}"
               )
           )

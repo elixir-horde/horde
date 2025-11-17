@@ -1,10 +1,10 @@
-defmodule HordePro.Registry.Process do
+defmodule Horde.Registry.Process do
   @moduledoc false
   use Ecto.Schema
 
   import Ecto.Changeset
 
-  schema "horde_pro_registry_processes" do
+  schema "horde_registry_processes" do
     field(:registry_id, :string)
     field(:key, :binary)
     field(:pid, :binary)

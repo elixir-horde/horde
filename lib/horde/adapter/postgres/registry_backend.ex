@@ -1,11 +1,11 @@
-defmodule HordePro.Adapter.Postgres.RegistryBackend do
+defmodule Horde.Adapter.Postgres.RegistryBackend do
   @moduledoc false
 
-  require HordePro.Adapter.Postgres.Locker
+  require Horde.Adapter.Postgres.Locker
   import Ecto.Query, only: [from: 2]
 
-  alias HordePro.Adapter.Postgres.Locker
-  alias HordePro.Adapter.Postgres.RegistryManager
+  alias Horde.Adapter.Postgres.Locker
+  alias Horde.Adapter.Postgres.RegistryManager
 
   defmacro b(label, do: block) do
     quote do
@@ -105,13 +105,13 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     query = """
     WITH insert_processes AS (
       INSERT INTO
-        horde_pro_registry_processes (registry_id, KEY, pid, value, is_unique, lock_id)
+        horde_registry_processes (registry_id, KEY, pid, value, is_unique, lock_id)
       VALUES
         ($1, $2, $3, $4, $5, $8)
     ),
     stream AS (
       UPDATE
-        horde_pro_registry_event_streams
+        horde_registry_event_streams
       SET
         event_counter = event_counter + 1
       WHERE
@@ -121,7 +121,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     ),
     new_events AS (
       INSERT INTO
-        horde_pro_registry_events (registry_id, event_body, event_counter)
+        horde_registry_events (registry_id, event_body, event_counter)
       VALUES
         (
           $1,
@@ -141,7 +141,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
         event_body,
         event_counter
       FROM
-        horde_pro_registry_events
+        horde_registry_events
       WHERE
         registry_id = $1
         AND event_counter > $7
@@ -189,7 +189,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       end)
 
     # RegistryManager.replay_events(backend.manager_pid, events_decoded, new_event_counter)
-    # HordePro.Registry.replay_events(backend.registry, backend.partition, events_decoded)
+    # Horde.Registry.replay_events(backend.registry, backend.partition, events_decoded)
     {events_decoded, new_event_counter}
   end
 
@@ -213,7 +213,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     query = """
     WITH delete_processes AS (
       DELETE FROM
-        horde_pro_registry_processes
+        horde_registry_processes
       WHERE
         registry_id = $1
         AND KEY = $2
@@ -221,7 +221,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     ),
     stream AS (
       UPDATE
-        horde_pro_registry_event_streams
+        horde_registry_event_streams
       SET
         event_counter = event_counter + 1
       WHERE
@@ -231,7 +231,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     ),
     new_events AS (
       INSERT INTO
-        horde_pro_registry_events (registry_id, event_body, event_counter)
+        horde_registry_events (registry_id, event_body, event_counter)
       VALUES
         (
           $1,
@@ -251,7 +251,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
         event_body,
         event_counter
       FROM
-        horde_pro_registry_events
+        horde_registry_events
       WHERE
         registry_id = $1
         AND event_counter > $5
@@ -282,7 +282,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
   def get_events(t, event_counter) do
     registry_id = t.registry_id <> to_string(t.partition)
 
-    from(e in HordePro.Registry.Event,
+    from(e in Horde.Registry.Event,
       where: e.registry_id == ^registry_id,
       where: e.event_counter > ^event_counter,
       order_by: {:desc, e.event_counter},
@@ -308,7 +308,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       SELECT
         event_counter
       FROM
-        horde_pro_registry_event_streams
+        horde_registry_event_streams
       WHERE
         registry_id = $1
     )
@@ -323,7 +323,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
       pid,
       value
     FROM
-      horde_pro_registry_processes
+      horde_registry_processes
     WHERE
       registry_id = $1
     """
@@ -358,7 +358,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
 
     query = """
     INSERT INTO
-      horde_pro_registry_event_streams (registry_id, event_counter)
+      horde_registry_event_streams (registry_id, event_counter)
     VALUES
       ($1, 0) ON conflict DO nothing
     """
@@ -368,7 +368,7 @@ defmodule HordePro.Adapter.Postgres.RegistryBackend do
     ]
 
     {:ok, _result} = t.repo.query(query, params)
-    HordePro.Registry.init_registry(t.kind, t.pid_ets, t.key_ets, entries)
+    Horde.Registry.init_registry(t.kind, t.pid_ets, t.key_ets, entries)
   end
 
   def terminate(t) do

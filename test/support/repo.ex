@@ -1,6 +1,6 @@
-defmodule HordeProTest.Repo do
+defmodule HordeTest.Repo do
   use Ecto.Repo,
-    otp_app: :horde_pro,
+    otp_app: :horde,
     adapter: Ecto.Adapters.Postgres
 
   def init(_context, config) do

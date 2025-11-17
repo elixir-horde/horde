@@ -5,11 +5,11 @@
 # - This record is built from a single stream of events, which reside in the database.
 # - Every [interval] we pull the events we don't have yet (NB: or use LISTEN/NOTIFY)
 # - Events are properly serialized (meaning: inserts will be ordered correctly; no possibility to insert record 2 before record 1 has been completely inserted). This means we will have to do some funny business with locks. But it should be very performant, able to process tens of thousands of insertions per second.
-# - The rest of the Registry will be copied from Elixir.Registry. We will try the same approach as HordePro.DynamicSupervisor, where we shim our additions in.
+# - The rest of the Registry will be copied from Elixir.Registry. We will try the same approach as Horde.DynamicSupervisor, where we shim our additions in.
 #
 # TODO later, locking / unlocking (can do this with advisory locks)
 #
-defmodule HordePro.Registry do
+defmodule Horde.Registry do
   @moduledoc ~S"""
   A local, decentralized and scalable key-value process storage.
 
@@ -183,7 +183,7 @@ defmodule HordePro.Registry do
   Note that the registry uses one ETS table plus two ETS tables per partition.
   """
 
-  alias HordePro.Enum2
+  alias Horde.Enum2
 
   @keys [:unique, :duplicate]
   @all_info -1
@@ -404,7 +404,7 @@ defmodule HordePro.Registry do
             "expected :compressed to be a boolean, got: #{inspect(compressed)}"
     end
 
-    # backend = HordePro.Adapter.Postgres.RegistryBackend.new(registry_id: horde_name, repo: repo)
+    # backend = Horde.Adapter.Postgres.RegistryBackend.new(registry_id: horde_name, repo: repo)
 
     # The @info format must be kept in sync with Registry.Partition optimization.
     entries = [
@@ -412,7 +412,7 @@ defmodule HordePro.Registry do
       {@key_info, {keys, partitions, nil}} | meta
     ]
 
-    HordePro.Registry.Supervisor.start_link(
+    Horde.Registry.Supervisor.start_link(
       keys,
       name,
       partitions,
@@ -704,7 +704,7 @@ defmodule HordePro.Registry do
       when is_atom(registry) and is_function(function, 0) do
     {_kind, partitions, _, pid_ets, _} = info!(registry)
     {pid_server, _pid_ets} = pid_ets || pid_ets!(registry, lock_key, partitions)
-    HordePro.Registry.Partition.lock(pid_server, lock_key, function)
+    Horde.Registry.Partition.lock(pid_server, lock_key, function)
   end
 
   @doc """
@@ -1145,8 +1145,8 @@ defmodule HordePro.Registry do
   @doc false
   def horde_register_key(backend, kind, key_ets, key, {key, {self, value}}) do
     {events, event_counter} =
-      HordePro.Adapter.Postgres.RegistryBackend.with_event_counter(backend, fn backend ->
-        HordePro.Adapter.Postgres.RegistryBackend.register_key(
+      Horde.Adapter.Postgres.RegistryBackend.with_event_counter(backend, fn backend ->
+        Horde.Adapter.Postgres.RegistryBackend.register_key(
           backend,
           kind,
           key_ets,
@@ -1155,17 +1155,17 @@ defmodule HordePro.Registry do
         )
       end)
 
-    HordePro.Adapter.Postgres.RegistryBackend.replay_events(backend, events, event_counter)
+    Horde.Adapter.Postgres.RegistryBackend.replay_events(backend, events, event_counter)
   end
 
   @doc false
   def horde_unregister_key(backend, key, pid) do
     {events, event_counter} =
-      HordePro.Adapter.Postgres.RegistryBackend.with_event_counter(backend, fn backend ->
-        HordePro.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, pid)
+      Horde.Adapter.Postgres.RegistryBackend.with_event_counter(backend, fn backend ->
+        Horde.Adapter.Postgres.RegistryBackend.unregister_key(backend, key, pid)
       end)
 
-    HordePro.Adapter.Postgres.RegistryBackend.replay_events(backend, events, event_counter)
+    Horde.Adapter.Postgres.RegistryBackend.replay_events(backend, events, event_counter)
   end
 
   @doc false
@@ -1663,7 +1663,7 @@ defmodule HordePro.Registry do
   defp reserved_atom?(_), do: false
 end
 
-defmodule HordePro.Registry.Supervisor do
+defmodule Horde.Registry.Supervisor do
   @moduledoc false
   use Supervisor
 
@@ -1678,8 +1678,8 @@ defmodule HordePro.Registry.Supervisor do
 
     children =
       for i <- 0..(partitions - 1) do
-        key_partition = HordePro.Registry.Partition.key_name(registry, i)
-        pid_partition = HordePro.Registry.Partition.pid_name(registry, i)
+        key_partition = Horde.Registry.Partition.key_name(registry, i)
+        pid_partition = Horde.Registry.Partition.pid_name(registry, i)
 
         arg =
           {kind, registry, i, partitions, key_partition, pid_partition, listeners, compressed,
@@ -1687,7 +1687,7 @@ defmodule HordePro.Registry.Supervisor do
 
         %{
           id: pid_partition,
-          start: {HordePro.Registry.Partition, :start_link, [pid_partition, arg]}
+          start: {Horde.Registry.Partition, :start_link, [pid_partition, arg]}
         }
       end
 
@@ -1705,7 +1705,7 @@ defmodule HordePro.Registry.Supervisor do
   defp strategy_for_kind(:duplicate), do: :one_for_one
 end
 
-defmodule HordePro.Registry.Partition do
+defmodule Horde.Registry.Partition do
   @moduledoc false
 
   # This process owns the equivalent key and pid ETS tables
@@ -1764,7 +1764,7 @@ defmodule HordePro.Registry.Partition do
     pid_ets = init_pid_ets(kind, pid_partition)
 
     backend =
-      HordePro.Adapter.Postgres.RegistryBackend.init(backend,
+      Horde.Adapter.Postgres.RegistryBackend.init(backend,
         registry: registry,
         partition: i,
         key_ets: key_ets,
@@ -1848,9 +1848,9 @@ defmodule HordePro.Registry.Partition do
         end
 
       try do
-        HordePro.Registry.horde_unregister_key(backend, key, pid)
+        Horde.Registry.horde_unregister_key(backend, key, pid)
 
-        HordePro.Registry.__unregister__(key_ets, {key, {pid, :_}}, 1)
+        Horde.Registry.__unregister__(key_ets, {key, {pid, :_}}, 1)
       catch
         :error, :badarg -> :badarg
       end
@@ -1869,7 +1869,7 @@ defmodule HordePro.Registry.Partition do
   end
 
   def terminate(_, {_ets, backend, _lock}) do
-    HordePro.Adapter.Postgres.RegistryBackend.terminate(backend)
+    Horde.Adapter.Postgres.RegistryBackend.terminate(backend)
   end
 
   defp unlock(key, {ets, backend, lock}) do
