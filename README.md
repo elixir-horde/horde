@@ -13,6 +13,14 @@ At the moment, Horde supports Postgres as its back-end. If you are interested in
 
 Refer to `Horde.DynamicSupervisor` and `Horde.Registry` for detailed documentation.
 
+## A Note on the Backend Migration
+
+Horde has transitioned from the CRDT-based backend used in previous versions to a Postgres-backed coordination model. Postgres is already a trusted and reliable singleton in most production environments, and this shift allows Horde to offer more predictable behavior, simpler internals, and a more robust foundation overall.
+
+If you prefer to continue using the CRDT-based approach, it remains fully available under the new package name **`horde-classic`**. This provides full continuity for existing setups while allowing new projects to benefit from the improved design.
+
+Alongside the backend migration, we made several architectural refinements that significantly reduced internal complexity and improved performance, maintainability, and operational clarity.
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed
