@@ -7,6 +7,18 @@ defmodule Horde.RegistryImpl do
 
   defmodule State do
     @moduledoc false
+
+    @type t :: %__MODULE__{
+            name: atom() | nil,
+            nodes: MapSet.t(node()),
+            members: MapSet.t({atom(), node()}),
+            registry_ets_table: atom() | nil,
+            pids_ets_table: atom() | nil,
+            keys_ets_table: atom() | nil,
+            members_ets_table: atom() | nil,
+            listeners: [atom()]
+          }
+
     defstruct name: nil,
               nodes: MapSet.new(),
               members: MapSet.new(),

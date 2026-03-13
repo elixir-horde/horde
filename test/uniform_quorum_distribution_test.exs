@@ -59,4 +59,49 @@ defmodule UniformQuorumDistributionTest do
       end
     end
   end
+
+  test "has_quorum? returns false for empty list" do
+    refute Horde.UniformQuorumDistribution.has_quorum?([])
+  end
+
+  test "has_quorum? returns nil when all members are shutting_down" do
+    members = [
+      %{status: :shutting_down, name: :a},
+      %{status: :shutting_down, name: :b},
+      %{status: :shutting_down, name: :c}
+    ]
+
+    assert Horde.UniformQuorumDistribution.has_quorum?(members) == nil
+  end
+
+  test "has_quorum? returns true when majority is alive" do
+    members = [
+      %{status: :alive, name: :a},
+      %{status: :alive, name: :b},
+      %{status: :dead, name: :c}
+    ]
+
+    assert Horde.UniformQuorumDistribution.has_quorum?(members)
+  end
+
+  test "has_quorum? returns false when majority is dead" do
+    members = [
+      %{status: :alive, name: :a},
+      %{status: :dead, name: :b},
+      %{status: :dead, name: :c}
+    ]
+
+    refute Horde.UniformQuorumDistribution.has_quorum?(members)
+  end
+
+  test "choose_node returns quorum_not_met when no quorum" do
+    members = [
+      %{status: :alive, name: :a},
+      %{status: :dead, name: :b},
+      %{status: :dead, name: :c}
+    ]
+
+    assert {:error, :quorum_not_met} =
+             Horde.UniformQuorumDistribution.choose_node(%{id: :test, start: {:test}}, members)
+  end
 end
