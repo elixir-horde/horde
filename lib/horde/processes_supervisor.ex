@@ -185,7 +185,7 @@ defmodule Horde.ProcessesSupervisor do
 
   @doc """
   Callback invoked to start the supervisor and during hot code upgrades.
-
+  
   Developers typically invoke `DynamicSupervisor.init/1` at the end of
   their init callback to return the proper supervision flags.
   """
@@ -243,7 +243,7 @@ defmodule Horde.ProcessesSupervisor do
 
   @doc """
   Returns a specification to start a dynamic supervisor under a supervisor.
-
+  
   See `Supervisor`.
   """
   def child_spec(opts) when is_list(opts) do
@@ -268,7 +268,7 @@ defmodule Horde.ProcessesSupervisor do
       if Module.get_attribute(__MODULE__, :doc) == nil do
         @doc """
         Returns a specification to start this module under a supervisor.
-
+        
         See `Supervisor`.
         """
       end
@@ -297,21 +297,21 @@ defmodule Horde.ProcessesSupervisor do
 
   @doc """
   Starts a supervisor with the given options.
-
+  
   The `:strategy` is a required option and the currently supported
   value is `:one_for_one`. The remaining options can be found in the
   `init/1` docs.
-
+  
   The `:name` option can also be used to register a supervisor name.
   The supported values are described under the "Name registration"
   section in the `GenServer` module docs.
-
+  
   If the supervisor is successfully spawned, this function returns
   `{:ok, pid}`, where `pid` is the PID of the supervisor. If the supervisor
   is given a name and a process with the specified name already exists,
   the function returns `{:error, {:already_started, pid}}`, where `pid`
   is the PID of that process.
-
+  
   Note that a supervisor started with this function is linked to the parent
   process and exits not only on crashes but also if the parent process exits
   with `:normal` reason.
@@ -333,18 +333,18 @@ defmodule Horde.ProcessesSupervisor do
 
   @doc """
   Starts a module-based supervisor process with the given `module` and `arg`.
-
+  
   To start the supervisor, the `c:init/1` callback will be invoked in the given
   `module`, with `arg` as its argument. The `c:init/1` callback must return a
   supervisor specification which can be created with the help of the `init/1`
   function.
-
+  
   If the `c:init/1` callback returns `:ignore`, this function returns
   `:ignore` as well and the supervisor terminates with reason `:normal`.
   If it fails or returns an incorrect value, this function returns
   `{:error, term}` where `term` is a term with information about the
   error, and the supervisor terminates with reason `term`.
-
+  
   The `:name` option can also be given in order to register a supervisor
   name, the supported values are described in the "Name registration"
   section in the `GenServer` module docs.
@@ -356,23 +356,23 @@ defmodule Horde.ProcessesSupervisor do
 
   @doc """
   Dynamically adds a child specification to `supervisor` and starts that child.
-
+  
   `child_spec` should be a valid child specification as detailed in the
   "child_spec/1" section of the documentation for `Supervisor`. The child
   process will be started as defined in the child specification.
-
+  
   If the child process start function returns `{:ok, child}` or `{:ok, child,
   info}`, then child specification and PID are added to the supervisor and
   this function returns the same value.
-
+  
   If the child process start function returns `:ignore`, then no child is added
   to the supervision tree and this function returns `:ignore` too.
-
+  
   If the child process start function returns an error tuple or an erroneous
   value, or if it fails, the child specification is discarded and this function
   returns `{:error, error}` where `error` is a term containing information about
   the error and child specification.
-
+  
   If the supervisor already has N children in a way that N exceeds the amount
   of `:max_children` set on the supervisor initialization (see `init/1`), then
   this function returns `{:error, :max_children}`.
@@ -447,7 +447,7 @@ defmodule Horde.ProcessesSupervisor do
 
   @doc """
   Terminates the given child identified by `pid`.
-
+  
   If successful, this function returns `:ok`. If there is no process with
   the given PID, this function returns `{:error, :not_found}`.
   """
@@ -458,23 +458,23 @@ defmodule Horde.ProcessesSupervisor do
 
   @doc """
   Returns a list with information about all children.
-
+  
   Note that calling this function when supervising a large number
   of children under low memory conditions can cause an out of memory
   exception.
-
+  
   This function returns a list of tuples containing:
-
+  
     * `id` - it is always `:undefined` for dynamic supervisors
-
+  
     * `child` - the pid of the corresponding child process or the
       atom `:restarting` if the process is about to be restarted
-
+  
     * `type` - `:worker` or `:supervisor` as defined in the child
       specification
-
+  
     * `modules` - as defined in the child specification
-
+  
   """
   @spec which_children(Supervisor.supervisor()) :: [
           {:undefined, pid | :restarting, :worker | :supervisor, modules}
@@ -486,20 +486,20 @@ defmodule Horde.ProcessesSupervisor do
 
   @doc """
   Returns a map containing count values for the supervisor.
-
+  
   The map contains the following keys:
-
+  
     * `:specs` - the number of children processes
-
+  
     * `:active` - the count of all actively running child processes managed by
       this supervisor
-
+  
     * `:supervisors` - the count of all supervisors whether or not the child
       process is still alive
-
+  
     * `:workers` - the count of all workers, whether or not the child process
       is still alive
-
+  
   """
   @spec count_children(Supervisor.supervisor()) :: %{
           specs: non_neg_integer,
@@ -513,10 +513,10 @@ defmodule Horde.ProcessesSupervisor do
 
   @doc """
   Synchronously stops the given supervisor with the given `reason`.
-
+  
   It returns `:ok` if the supervisor terminates with the given
   reason. If it terminates with another reason, the call exits.
-
+  
   This function keeps OTP semantics regarding error reporting.
   If the reason is any other than `:normal`, `:shutdown` or
   `{:shutdown, _}`, an error report is logged.
@@ -528,43 +528,43 @@ defmodule Horde.ProcessesSupervisor do
 
   @doc """
   Receives a set of `options` that initializes a dynamic supervisor.
-
+  
   This is typically invoked at the end of the `c:init/1` callback of
   module-based supervisors. See the "Module-based supervisors" section
   in the module documentation for more information.
-
+  
   The `options` received by this function are also supported by `start_link/2`.
-
+  
   This function returns a tuple containing the supervisor options.
-
+  
   ## Examples
-
+  
       def init(_arg) do
         DynamicSupervisor.init(max_children: 1000, strategy: :one_for_one)
       end
-
+  
   ## Options
-
+  
     * `:strategy` - the restart strategy option. The only supported
       value is `:one_for_one` which means that no other child is
       terminated if a child process terminates. You can learn more
       about strategies in the `Supervisor` module docs.
-
+  
     * `:max_restarts` - the maximum number of restarts allowed in
       a time frame. Defaults to `3`.
-
+  
     * `:max_seconds` - the time frame in which `:max_restarts` applies.
       Defaults to `5`.
-
+  
     * `:max_children` - the maximum amount of children to be running
       under this supervisor at the same time. When `:max_children` is
       exceeded, `start_child/2` returns `{:error, :max_children}`. Defaults
       to `:infinity`.
-
+  
     * `:extra_arguments` - arguments that are prepended to the arguments
       specified in the child spec given to `start_child/2`. Defaults to
       an empty list.
-
+  
   """
   @spec init([init_option]) :: {:ok, sup_flags()} | :ignore | {:stop, reason :: term()}
   def init(options) when is_list(options) do
@@ -1021,7 +1021,7 @@ defmodule Horde.ProcessesSupervisor do
 
   defp remove_child_from_horde(state, pid) do
     {child_id, _, _, _, _, _} = Map.get(state.children, pid)
-    GenServer.cast(state.root_name, {:disown_child_process, child_id})
+    GenServer.cast(state.root_name, {:release_child_process, child_id})
   end
 
   defp delete_child(pid, %{children: children} = state) do
@@ -1065,7 +1065,7 @@ defmodule Horde.ProcessesSupervisor do
         GenServer.cast(state.root_name, {:update_child_pid, child_id, new_pid})
 
       _pid_deleted ->
-        GenServer.cast(state.root_name, {:disown_child_process, child_id})
+        GenServer.cast(state.root_name, {:release_child_process, child_id})
     end
   end
 

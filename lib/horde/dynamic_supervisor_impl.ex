@@ -227,8 +227,7 @@ defmodule Horde.DynamicSupervisorImpl do
     {:noreply, state}
   end
 
-  # TODO think of a better name than "disown_child_process"
-  def handle_cast({:disown_child_process, child_id}, state) do
+  def handle_cast({:release_child_process, child_id}, state) do
     {value, new_processes_by_id} = pop_item(state.processes_by_id, child_id)
 
     new_state =

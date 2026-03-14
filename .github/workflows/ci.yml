@@ -32,3 +32,26 @@ jobs:
         if: matrix.elixir-version == 1.15 && matrix.otp-version == 26
 
       - run: mix test
+
+  dialyzer:
+    runs-on: ubuntu-latest
+    name: Dialyzer
+    steps:
+      - uses: actions/checkout@v3
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: 1.15
+          otp-version: 26
+
+      - name: Restore PLT cache
+        uses: actions/cache@v3
+        with:
+          path: priv/plts
+          key: plt-${{ runner.os }}-1.15-26-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            plt-${{ runner.os }}-1.15-26-
+
+      - run: mkdir -p priv/plts
+      - run: mix deps.get
+      - run: mix dialyzer --plt
+      - run: mix dialyzer

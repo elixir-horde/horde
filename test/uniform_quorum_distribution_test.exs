@@ -60,6 +60,34 @@ defmodule UniformQuorumDistributionTest do
     end
   end
 
+  property "has_quorum? agrees with majority-alive calculation for odd-sized clusters" do
+    member =
+      ExUnitProperties.gen all(
+                             status <- StreamData.member_of([:alive, :dead]),
+                             name <- binary()
+                           ) do
+        %{status: status, name: "A#{name}"}
+      end
+
+    check all(
+            half <- list_of(member, min_length: 1),
+            extra <- member
+          ) do
+      members = [extra | half ++ half]
+
+      result = Horde.UniformQuorumDistribution.has_quorum?(members)
+
+      alive_count = Enum.count(members, &match?(%{status: :alive}, &1))
+      total_count = Enum.count(members)
+
+      if alive_count / total_count > 0.5 do
+        assert result
+      else
+        refute result
+      end
+    end
+  end
+
   test "has_quorum? returns false for empty list" do
     refute Horde.UniformQuorumDistribution.has_quorum?([])
   end

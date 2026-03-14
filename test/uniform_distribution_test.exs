@@ -32,6 +32,29 @@ defmodule UniformDistributionTest do
     end
   end
 
+  property "is deterministic for the same child_spec and members" do
+    member =
+      ExUnitProperties.gen all(
+                             node_id <- integer(1..100_000),
+                             status <- StreamData.member_of([:alive]),
+                             name <- binary(),
+                             pid <- atom(:alias)
+                           ) do
+        %{node_id: node_id, status: status, pid: pid, name: "A#{name}"}
+      end
+
+    check all(
+            members <- list_of(member, min_length: 1),
+            identifier <- string(:alphanumeric)
+          ) do
+      child_spec = %{id: identifier, start: {identifier}}
+      result_a = Horde.UniformDistribution.choose_node(child_spec, members)
+      result_b = Horde.UniformDistribution.choose_node(child_spec, members)
+
+      assert result_a == result_b
+    end
+  end
+
   property "returns error if no alive nodes are available" do
     member =
       ExUnitProperties.gen all(

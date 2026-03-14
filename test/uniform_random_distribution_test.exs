@@ -31,6 +31,22 @@ defmodule UniformRandomDistributionTest do
     end
   end
 
+  property "has_quorum? always returns true" do
+    member =
+      ExUnitProperties.gen all(
+                             node_id <- integer(1..100_000),
+                             status <- StreamData.member_of([:alive, :dead, :shutting_down]),
+                             name <- binary(),
+                             pid <- atom(:alias)
+                           ) do
+        %{node_id: node_id, status: status, pid: pid, name: name}
+      end
+
+    check all(members <- list_of(member)) do
+      assert Horde.UniformRandomDistribution.has_quorum?(members)
+    end
+  end
+
   property "returns error if no alive nodes are available" do
     member =
       ExUnitProperties.gen all(

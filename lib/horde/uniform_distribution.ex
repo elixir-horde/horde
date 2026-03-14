@@ -3,11 +3,14 @@ defmodule Horde.UniformDistribution do
 
   @moduledoc """
   Distributes processes to nodes uniformly using a hash ring.
-
+  
   Given the *same* set of members, it will always start
   the same process on the same node.
   """
 
+  @impl true
+  @spec choose_node(Supervisor.child_spec(), [Horde.DistributionStrategy.member()]) ::
+          {:ok, Horde.DistributionStrategy.member()} | {:error, :no_alive_nodes}
   def choose_node(child_spec, members) do
     identifier = :erlang.phash2(Map.drop(child_spec, [:id]))
 
@@ -28,5 +31,7 @@ defmodule Horde.UniformDistribution do
     end
   end
 
+  @impl true
+  @spec has_quorum?([Horde.DistributionStrategy.member()]) :: boolean()
   def has_quorum?(_members), do: true
 end

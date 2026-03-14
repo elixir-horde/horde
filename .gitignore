@@ -29,3 +29,6 @@ horde-*.tar
 .tool-versions
 
 *.app
+
+# Dialyzer PLT files
+/priv/plts/

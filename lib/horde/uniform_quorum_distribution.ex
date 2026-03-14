@@ -3,11 +3,14 @@ defmodule Horde.UniformQuorumDistribution do
 
   @moduledoc """
   Distributes processes to nodes uniformly using a hash ring. Contains a quorum mechanism to handle netsplits.
-
+  
   It enforces a quorum and will shut down all processes on a node if it is split from the rest of the cluster.
   """
   require Integer
 
+  @impl true
+  @spec choose_node(Supervisor.child_spec(), [Horde.DistributionStrategy.member()]) ::
+          {:ok, Horde.DistributionStrategy.member()} | {:error, :no_alive_nodes | :quorum_not_met}
   def choose_node(child_spec, members) do
     if has_quorum?(members) do
       Horde.UniformDistribution.choose_node(child_spec, members)
@@ -16,6 +19,8 @@ defmodule Horde.UniformQuorumDistribution do
     end
   end
 
+  @impl true
+  @spec has_quorum?([Horde.DistributionStrategy.member()]) :: boolean() | nil
   def has_quorum?([]), do: false
 
   def has_quorum?(members) do
