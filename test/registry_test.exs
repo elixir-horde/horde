@@ -382,6 +382,25 @@ defmodule RegistryTest do
       Process.sleep(200)
       assert %{} == processes(horde2)
     end
+
+    test "can be unregistered by a process other than the holder" do
+      horde = start_registry()
+
+      holder =
+        spawn(fn ->
+          Horde.Registry.register(horde, :shared_key, :value)
+          Process.sleep(:infinity)
+        end)
+
+      assert [{^holder, :value}] = await_lookup(horde, :shared_key, [{holder, :value}])
+
+      # unregister from the test process, which does not hold the name
+      Horde.Registry.unregister(horde, :shared_key)
+
+      assert [] = await_lookup(horde, :shared_key, [])
+      assert Process.alive?(holder)
+      Process.exit(holder, :kill)
+    end
   end
 
   describe ".unregister_match/4" do
@@ -907,6 +926,24 @@ defmodule RegistryTest do
       refute Process.alive?(p1)
       assert Process.alive?(p2)
     end
+
+    test "a live holder survives a stale remove update" do
+      horde = start_registry()
+
+      holder = start_registered_process(horde, "key", :value)
+      Process.sleep(100)
+      assert [{^holder, :value}] = Horde.Registry.lookup(horde, "key")
+
+      # simulate a stale remove arriving from the CRDT layer while the
+      # holder lives (retransmitted delete, GC purge side effect, netsplit
+      # artifact): the entry must be defended, not deleted
+      send(horde, {:crdt_update, [{:remove, {:key, "key"}}]})
+      Process.sleep(200)
+
+      assert [{^holder, :value}] = Horde.Registry.lookup(horde, "key")
+      assert Process.alive?(holder)
+      Process.exit(holder, :kill)
+    end
   end
 
   describe "listeners" do
@@ -1016,6 +1053,20 @@ defmodule RegistryTest do
 
     assert_receive {:registered, ^pid}
     pid
+  end
+
+  defp await_lookup(registry, key, expected, attempts \\ 100)
+  defp await_lookup(_registry, _key, _expected, 0), do: :timeout
+
+  defp await_lookup(registry, key, expected, attempts) do
+    case Horde.Registry.lookup(registry, key) do
+      ^expected ->
+        expected
+
+      _ ->
+        Process.sleep(50)
+        await_lookup(registry, key, expected, attempts - 1)
+    end
   end
 
   defp start_registry(opts \\ [keys: :unique]) do

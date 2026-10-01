@@ -209,38 +209,67 @@ defmodule Horde.RegistryImpl do
   end
 
   defp process_diff(state, {:add, {:key, key}, {member, pid, value}}) do
-    link_local_pid(pid)
-
     case :ets.lookup(state.keys_ets_table, key) do
       [{^key, _member, {other_pid, other_value}}] when other_pid != pid ->
-        resolve_key_conflict(state, key, member, pid, value, other_pid, other_value)
+        case resolve_key_conflict(state, key, member, pid, value, other_pid, other_value) do
+          :inserted ->
+            link_local_pid(pid)
+
+            for listener <- state.listeners do
+              send(listener, {:register, state.name, key, pid, value})
+            end
+
+          :dropped ->
+            :ok
+        end
 
       _ ->
+        link_local_pid(pid)
         insert_key(state, key, member, pid, value)
-    end
 
-    for listener <- state.listeners do
-      send(listener, {:register, state.name, key, pid, value})
+        for listener <- state.listeners do
+          send(listener, {:register, state.name, key, pid, value})
+        end
     end
 
     state
   end
 
-  # Two processes claim the same key. Dead entries never evict a live holder;
-  # a live process takes over from a dead holder silently; only a genuine
-  # conflict between two live processes kills the incumbent.
+  # Two processes claim the same key. Entries that are not alive never evict
+  # a live holder; a live process takes over silently (cleaning the pids
+  # entry + notifying listeners) and purges the dead dots globally so
+  # survivors blocked by LWW (dead timestamp larger after VM restart) flip
+  # to the live value. Only a genuine conflict between two live processes
+  # kills the incumbent. Dead with no live contender anywhere is retained
+  # (hidden from lookup) — no deletion without a live holder for that key.
   defp resolve_key_conflict(state, key, member, pid, value, other_pid, other_value) do
     case {process_alive?(pid), process_alive?(other_pid)} do
       {true, true} ->
         unregister_local(state, key, other_pid)
         Process.exit(other_pid, {:name_conflict, {key, other_value}, state.name, pid})
         insert_key(state, key, member, pid, value)
+        :inserted
 
       {true, false} ->
+        unregister_local(state, key, other_pid)
         insert_key(state, key, member, pid, value)
+        # Purge the dead dots that outranked the live value in LWW.
+        # Survivors holding only the dead entry flip to the live value
+        # (or empty, then live via re-put below). The purge also wipes the
+        # live dots known locally as a side effect; the holder defends via
+        # re-put on remove.
+        DeltaCrdt.drop(crdt_name(state.name), [{:key, key}], :infinity)
+        :inserted
+
+      {false, true} ->
+        # Incoming dead for a key I hold live (e.g. stale larger timestamp
+        # arriving after restart). Keep the live locally and purge the dead
+        # dots globally so survivors flip to live. No ETS change, no notify.
+        DeltaCrdt.drop(crdt_name(state.name), [{:key, key}], :infinity)
+        :dropped
 
       {false, _} ->
-        :ok
+        :dropped
     end
   end
 
@@ -250,7 +279,25 @@ defmodule Horde.RegistryImpl do
   end
 
   defp process_diff(state, {:remove, {:key, key}}) do
-    unregister_local(state, key)
+    with [{^key, member, {pid, value}}] <- :ets.lookup(state.keys_ets_table, key),
+         true <- node(pid) == node(),
+         true <- member == fully_qualified_name(state.name),
+         true <- Process.alive?(pid) do
+      # I am the holder registry and live holder but CRDT says empty
+      # (e.g. a peer's cleanup drop wiped my dots as a side effect). Defend
+      # by re-putting. Voluntary unregister/exit already cleared local ETS
+      # synchronously, so they fall through to delete. Replicas (different
+      # member) always delete, even if pid happens to be local-alive in
+      # same-VM multi-registry tests.
+      DeltaCrdt.put(
+        crdt_name(state.name),
+        {:key, key},
+        {member, pid, value},
+        :infinity
+      )
+    else
+      _ -> unregister_local(state, key)
+    end
 
     state
   end
@@ -349,10 +396,10 @@ defmodule Horde.RegistryImpl do
     {:reply, :ok, state}
   end
 
-  def handle_call({:unregister, key, pid}, _from, state) do
+  def handle_call({:unregister, key, _pid}, _from, state) do
     DeltaCrdt.delete(crdt_name(state.name), {:key, key}, :infinity)
 
-    unregister_local(state, key, pid)
+    unregister_local(state, key)
 
     {:reply, :ok, state}
   end
