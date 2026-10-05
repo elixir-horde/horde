@@ -21,7 +21,7 @@ Our goal is to keep these differences to the absolute minimum necessary, while e
 
 ## Running a single global process
 
-If you simply need to run a single process as a singleton in your cluster, I would encourage you to look at [Highlander](https://github.com/derekkraan/highlander) or [HighlanderPG](https://hex.pm/packages/highlander_pg) instead, as one of these may fit your use case better.
+If you simply need to run a single process as a singleton in your cluster, I would encourage you to look at [Highlander](https://hex.pm/packages/highlander) or [HighlanderPG](https://hex.pm/packages/highlander_pg) instead, as one of these may fit your use case better.
 
 ## 1.0 release
 
