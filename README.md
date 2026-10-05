@@ -1,4 +1,4 @@
-# Horde [![Hex pm](http://img.shields.io/hexpm/v/horde.svg?style=flat)](https://hex.pm/packages/horde) [![.github/workflows/ci.yml](https://github.com/derekkraan/horde/actions/workflows/ci.yml/badge.svg)](https://github.com/derekkraan/horde/actions/workflows/ci.yml) [![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/horde)
+# Horde [![Hex pm](https://img.shields.io/hexpm/v/horde.svg?style=flat)](https://hex.pm/packages/horde) [![.github/workflows/ci.yml](https://github.com/elixir-horde/horde/actions/workflows/ci.yml/badge.svg)](https://github.com/elixir-horde/horde/actions/workflows/ci.yml) [![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/horde)
 
 
 Distribute your application over multiple servers with Horde.
@@ -7,7 +7,7 @@ Horde is comprised of `Horde.DynamicSupervisor`, a distributed supervisor, and `
 
 Read the [full documentation](https://hexdocs.pm/horde) on hexdocs.pm.
 
-There is an [introductory blog post](https://moosecode.nl/blog/introducing_horde) and a [getting started guide](https://moosecode.nl/blog/getting_started_horde). You can also find me in the Elixir slack channel #horde.
+There is an [introductory blog post](https://web.archive.org/web/20250815064919/https://moosecode.nl/blog/introducing_horde) and a [getting started guide](https://web.archive.org/web/20250914111642/https://moosecode.nl/blog/getting_started_horde). You can also find me in the Elixir slack channel #horde.
 
 Daniel Azuma gave [a great talk](https://www.youtube.com/watch?v=nLApFANtkHs) at ElixirConf US 2018 where he demonstrated Horde's Supervisor and Registry.
 
@@ -21,7 +21,7 @@ Our goal is to keep these differences to the absolute minimum necessary, while e
 
 ## Running a single global process
 
-If you simply need to run a single process as a singleton in your cluster, I would encourage you to look at [Highlander](https://github.com/derekkraan/highlander) or [HighlanderPG](https://hex.codecodeship.com/package/highlander_pg) instead, as one of these may fit your use case better.
+If you simply need to run a single process as a singleton in your cluster, I would encourage you to look at [Highlander](https://github.com/derekkraan/highlander) or [HighlanderPG](https://hex.pm/packages/highlander_pg) instead, as one of these may fit your use case better.
 
 ## 1.0 release
 
