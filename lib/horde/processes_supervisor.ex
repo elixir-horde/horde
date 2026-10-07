@@ -790,6 +790,10 @@ defmodule Horde.ProcessesSupervisor do
   defp exit_reason(:throw, value, stack), do: {{:nocatch, value}, stack}
 
   @impl true
+  def handle_cast(:quorum_lost, state) do
+    {:stop, {:shutdown, :quorum_lost}, state}
+  end
+
   def handle_cast(_msg, state) do
     {:noreply, state}
   end

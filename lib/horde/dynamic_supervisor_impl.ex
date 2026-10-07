@@ -642,7 +642,7 @@ defmodule Horde.DynamicSupervisorImpl do
         state
 
       true ->
-        :ok = Horde.ProcessesSupervisor.stop(supervisor_name(state.name))
+        GenServer.cast(supervisor_name(state.name), :quorum_lost)
         state
     end
   end

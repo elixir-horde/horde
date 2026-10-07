@@ -668,6 +668,35 @@ defmodule DynamicSupervisorTest do
     assert_receive {:DOWN, ^ref, _, _, _}, 1_000
   end
 
+  test "losing quorum doesn't crash when ProcessesSupervisor is already gone" do
+    name = :"horde_#{:rand.uniform(100_000_000)}"
+
+    start_supervised!(
+      {Horde.DynamicSupervisor,
+       name: name,
+       strategy: :one_for_one,
+       distribution_strategy: LocalQuorumOfTwo,
+       members: [name]}
+    )
+
+    {:ok, _} =
+      Horde.DynamicSupervisor.start_child(name, {Task, fn -> Process.sleep(:infinity) end})
+
+    impl = Process.whereis(name)
+    ref = Process.monitor(impl)
+
+    # Hold the root supervisor still, as if it was in the middle of shutting the tree down
+    # after ProcessesSupervisor exited, while the impl handles a quorum change.
+    root = Process.whereis(:"#{name}.Supervisor")
+    :sys.suspend(root)
+    Process.exit(Process.whereis(:"#{name}.ProcessesSupervisor"), :kill)
+
+    send(impl, {:set_members, [name]})
+
+    refute_receive {:DOWN, ^ref, _, _, _}, 200
+    :sys.resume(root)
+  end
+
   describe "redistribute" do
     test "processes should redistribute to new member nodes as they are added", context do
       n2_cspecs =
