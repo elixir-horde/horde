@@ -668,6 +668,18 @@ defmodule DynamicSupervisorTest do
     assert_receive {:DOWN, ^ref, _, _, _}, 1_000
   end
 
+  test "ignores stray trapped exits" do
+    name = :"horde_#{:rand.uniform(100_000_000)}"
+    start_supervised!({Horde.DynamicSupervisor, name: name, strategy: :one_for_one})
+
+    impl = Process.whereis(name)
+    ref = Process.monitor(impl)
+
+    send(impl, {:EXIT, self(), :boom})
+
+    refute_receive {:DOWN, ^ref, _, _, _}, 100
+  end
+
   describe "redistribute" do
     test "processes should redistribute to new member nodes as they are added", context do
       n2_cspecs =

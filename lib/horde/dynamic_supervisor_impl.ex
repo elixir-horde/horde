@@ -392,6 +392,11 @@ defmodule Horde.DynamicSupervisorImpl do
     end
   end
 
+  # An exit from our parent is handled by GenServer itself; we don't link to anything else.
+  def handle_info({:EXIT, _pid, _reason}, state) do
+    {:noreply, state}
+  end
+
   @doc false
   def handle_info({:processes_updated, reply_to}, %{shutting_down: true} = state) do
     GenServer.reply(reply_to, :ok)
