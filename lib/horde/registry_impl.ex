@@ -324,7 +324,9 @@ defmodule Horde.RegistryImpl do
       :infinity
     )
 
-    {:reply, {:ok, self()}, state}
+    # on_diffs/2 already queued this put. Publish it before replying so
+    # whereis_name/1 sees the pid. gen_statem checks the via name immediately.
+    {:reply, {:ok, self()}, apply_pending_crdt_updates(state)}
   end
 
   def handle_call({:update_value, key, pid, value}, _from, state) do
@@ -364,6 +366,18 @@ defmodule Horde.RegistryImpl do
 
   def handle_call(:members, _from, state) do
     {:reply, MapSet.to_list(state.members), state}
+  end
+
+  defp apply_pending_crdt_updates(state) do
+    receive do
+      {:crdt_update, diffs} ->
+        state
+        |> process_diffs(diffs)
+        |> apply_pending_crdt_updates()
+    after
+      0 ->
+        state
+    end
   end
 
   defp unregister_local(state, key) do
