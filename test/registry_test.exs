@@ -355,6 +355,12 @@ defmodule RegistryTest do
   end
 
   describe "register via callbacks" do
+    defmodule ViaStatem do
+      def callback_mode, do: :handle_event_function
+      def init(_), do: {:ok, :ready, %{}}
+      def handle_event(_, _, _, data), do: {:keep_state, data}
+    end
+
     test "register a name the 'via' way" do
       horde = start_registry()
 
@@ -363,6 +369,23 @@ defmodule RegistryTest do
       Process.sleep(10)
       assert 0 = Agent.get(name, & &1)
       assert [{apid, nil}] == Horde.Registry.lookup(horde, "precious")
+    end
+
+    test "gen_statem via name is registered before start returns" do
+      horde = start_registry()
+
+      assert [{:ok, _}, {:ok, _}, {:ok, _}, {:ok, _}, {:ok, _}] =
+               Enum.map(1..5, fn key ->
+                 Task.async(fn ->
+                   :gen_statem.start_link(
+                     {:via, Horde.Registry, {horde, key}},
+                     ViaStatem,
+                     [],
+                     []
+                   )
+                 end)
+               end)
+               |> Task.await_many()
     end
   end
 
