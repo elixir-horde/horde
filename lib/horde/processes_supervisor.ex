@@ -197,7 +197,8 @@ defmodule Horde.ProcessesSupervisor do
           intensity: non_neg_integer(),
           period: pos_integer(),
           max_children: non_neg_integer() | :infinity,
-          extra_arguments: [term()]
+          extra_arguments: [term()],
+          root_name: GenServer.server()
         }
 
   @typedoc "Option values used by the `start*` functions"
