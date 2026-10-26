@@ -200,7 +200,7 @@ defmodule Horde.RegistryImpl do
 
     DeltaCrdt.drop(
       crdt_name(state.name),
-      Enum.map(removed_keys, fn [key, _pid] -> {:key, key} end),
+      keys_still_held_by(state, member, removed_keys),
       :infinity
     )
 
@@ -253,6 +253,23 @@ defmodule Horde.RegistryImpl do
   defp process_diff(state, {:add, {:registry, key}, value}) do
     :ets.insert(state.registry_ets_table, {key, value})
     state
+  end
+
+  # The keys table can lag the CRDT. A key the removed member held may already
+  # have been registered again by another member, in a diff this process has not
+  # applied yet. Dropping that key would delete the new registration, so only
+  # the keys the CRDT still attributes to the removed member are dropped.
+  defp keys_still_held_by(_state, _member, []), do: []
+
+  defp keys_still_held_by(state, member, removed_keys) do
+    crdt_keys = Enum.map(removed_keys, fn [key, _pid] -> {:key, key} end)
+
+    crdt_name(state.name)
+    |> DeltaCrdt.take(crdt_keys, :infinity)
+    |> Enum.flat_map(fn
+      {crdt_key, {^member, _pid, _value}} -> [crdt_key]
+      _registered_elsewhere -> []
+    end)
   end
 
   defp add_key_to_pids_table(state, pid, key) do
