@@ -836,6 +836,57 @@ defmodule RegistryTest do
       assert %{} == processes(reg2)
       assert [] = Horde.Registry.lookup(reg2, "key")
     end
+
+    test "removing a member keeps a key registered again since the member held it" do
+      reg1 = Horde.Registry.ClusterM
+      reg2 = Horde.Registry.ClusterN
+
+      {:ok, _} =
+        Horde.Registry.start_link(
+          name: reg1,
+          keys: :unique,
+          members: [reg1, reg2],
+          delta_crdt_options: [sync_interval: 20]
+        )
+
+      {:ok, _} =
+        Horde.Registry.start_link(
+          name: reg2,
+          keys: :unique,
+          delta_crdt_options: [sync_interval: 20]
+        )
+
+      %{pid: old_pid} =
+        Task.async(fn ->
+          Horde.Registry.register(reg2, "key", nil)
+          Process.sleep(1_000)
+        end)
+
+      Process.sleep(200)
+      assert [{^old_pid, nil}] = Horde.Registry.lookup(reg1, "key")
+
+      new_pid = spawn(fn -> Process.sleep(:infinity) end)
+
+      # The member is removed and the key is registered again before reg1 has
+      # applied either change to its table, so the removal is applied first,
+      # against a table that still lists the key under the removed member. This
+      # is the order a node departure produces when a supervisor restarts the
+      # departed node's processes on a survivor.
+      :sys.suspend(reg1)
+      DeltaCrdt.drop(:"#{reg1}.Crdt", [{:member, {reg2, node()}}], :infinity)
+
+      DeltaCrdt.put(
+        :"#{reg1}.Crdt",
+        {:key, "key"},
+        {{reg1, node()}, new_pid, nil},
+        :infinity
+      )
+
+      :sys.resume(reg1)
+      Process.sleep(200)
+
+      assert [{^new_pid, nil}] = Horde.Registry.lookup(reg1, "key")
+    end
   end
 
   describe "listeners" do
